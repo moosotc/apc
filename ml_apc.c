@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 700
-#define _GNU_SOURCE
 #include <caml/fail.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
@@ -11,6 +9,13 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
+
+enum {
+    LINUX_TAG,
+    WINDOWS_TAG,
+    SOLARIS_TAG,
+    MACOSX_TAG
+};
 
 #ifdef _MSC_VER
 #define vsnprintf _vsnprintf
@@ -30,6 +35,7 @@ static void failwith_fmt (const char *fmt, ...)
 }
 
 #if defined __linux__
+#define _GNU_SOURCE
 #include <alloca.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -38,26 +44,6 @@ static void failwith_fmt (const char *fmt, ...)
 #include <signal.h>
 #include <string.h>
 #include <errno.h>
-
-CAMLprim value ml_waitalrm (value unit_v)
-{
-    CAMLparam1 (unit_v);
-    sigset_t set;
-    int signr;
-
-    sigemptyset (&set);
-    sigaddset (&set, SIGALRM);
-
-    caml_enter_blocking_section ();
-    {
-        if (sigwait (&set, &signr)) {
-            failwith_fmt ("sigwait: %s", strerror (errno));
-        }
-    }
-    caml_leave_blocking_section ();
-
-    CAMLreturn (Val_unit);
-}
 
 CAMLprim value ml_sysinfo (value unit_v)
 {
@@ -133,101 +119,10 @@ CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
     CAMLreturn (res_v);
 }
 
-CAMLprim value ml_get_hz (value unit_v)
+CAMLprim value ml_os_type (value unit_v)
 {
     CAMLparam1 (unit_v);
-    CAMLreturn (Val_int (sysconf (_SC_CLK_TCK)));
-}
-
-CAMLprim value ml_nice (value nice_v)
-{
-    CAMLparam1 (nice_v);
-    int niceval = Int_val (nice_v);
-
-    if (!nice (niceval)) {
-        failwith_fmt ("nice %d: %s", niceval, strerror (errno));
-    }
-
-    CAMLreturn (Val_unit);
-}
-
-#include <X11/X.h>
-#include <X11/Xmd.h>
-#include <X11/Xlib.h>
-#include <X11/Xatom.h>
-
-#include <GL/glx.h>
-
-struct X11State {
-    Display *dpy;
-    Window id;
-    Atom property;
-    int error;
-};
-
-CAMLprim value ml_seticon (value data_v)
-{
-    CAMLparam1 (data_v);
-    static struct X11State static_state;
-    struct X11State *s = &static_state;
-    void *ptr = String_val (data_v);
-    CARD32 *p = ptr;
-    unsigned char *data = ptr;
-
-    if (!s->error) {
-        if (!s->dpy) {
-            s->dpy = XOpenDisplay (NULL);
-            if (!s->dpy) {
-                goto err0;
-            }
-            else {
-                /* "tiny bit" hackish */
-                s->id = glXGetCurrentDrawable ();
-                if (s->id == None) {
-                    goto err1;
-                }
-
-                s->property = XInternAtom (s->dpy, "_NET_WM_ICON", False);
-                if (s->property == None){
-                    goto err1;
-                }
-
-#ifdef DEBUG
-                printf ("id = %#x, property = %d\n",
-                        (int) s->id, (int) s->property);
-#endif
-            }
-        }
-    }
-    else {
-        CAMLreturn (Val_unit);
-    }
-
-    p[0] = 32;
-    p[1] = 32;
-    XChangeProperty (s->dpy, s->id, s->property, XA_CARDINAL,
-                     32, PropModeReplace, data, 32 * 32 + 2);
-
-    CAMLreturn (Val_unit);
-
- err1:
-    XCloseDisplay (s->dpy);
- err0:
-    s->error = 1;
-    CAMLreturn (Val_unit);
-}
-
-CAMLprim value ml_delay (value secs_v)
-{
-    CAMLparam1 (secs_v);
-    failwith ("delay is not implemented on non-Windows");
-    CAMLreturn (Val_unit);
-}
-
-CAMLprim value ml_is_winnt (value unit_v)
-{
-    CAMLparam1 (unit_v);
-    CAMLreturn (Val_false);
+    CAMLreturn (Val_int (LINUX_TAG));
 }
 
 #elif defined _WIN32
@@ -309,7 +204,7 @@ static void init (void)
             GetProcAddress (glob.hmod, "ZwQuerySystemInformation");
         if (!glob.QuerySystemInformation) {
             failwith_fmt (
-                "could not obtain ZwQuerySystemInformation entry point: %#lx\n",
+                "could not obtain ZwQuerySystemInformation entry point: %#lx",
                 GetLastError ());
         }
     }
@@ -323,7 +218,8 @@ static void qsi (int c, PVOID buf, ULONG size)
     init ();
     status = glob.QuerySystemInformation (c, buf, size, &retsize);
     if (status < 0) {
-        failwith_fmt ("could not query system information %d\n", c);
+        failwith_fmt ("could not query system information %ld retsize %ld",
+                      c, retsize);
     }
     if (retsize != size) {
         fprintf (stderr, "class=%d status=%ld size=%d retsize=%d\n",
@@ -351,32 +247,6 @@ static void get_nprocs (void)
     glob.nprocs = sbi.NumberProcessors;
 }
 
-CAMLprim value ml_sysinfo (value unit_v)
-{
-    CAMLparam1 (unit_v);
-    CAMLlocal2 (res_v, loads_v);
-
-    get_nprocs ();
-
-    loads_v = caml_alloc_tuple (3);
-    Store_field (loads_v, 0, caml_copy_int64 (0));
-    Store_field (loads_v, 1, caml_copy_int64 (0));
-    Store_field (loads_v, 2, caml_copy_int64 (0));
-
-    res_v = caml_alloc_tuple (9);
-    Store_field (res_v, 0, 0);
-    Store_field (res_v, 1, loads_v);
-    Store_field (res_v, 2, 0);
-    Store_field (res_v, 3, 0);
-    Store_field (res_v, 4, 0);
-    Store_field (res_v, 5, 0);
-    Store_field (res_v, 6, 0);
-    Store_field (res_v, 7, 0);
-    Store_field (res_v, 8, glob.nprocs);
-
-    CAMLreturn (res_v);
-}
-
 CAMLprim value ml_get_nprocs (value unit_v)
 {
     CAMLparam1 (unit_v);
@@ -385,14 +255,14 @@ CAMLprim value ml_get_nprocs (value unit_v)
     CAMLreturn (Val_int (glob.nprocs));
 }
 
-CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
+CAMLprim value ml_windows_processor_times (value nprocs_v)
 {
-    CAMLparam2 (fd_v, nprocs_v);
+    CAMLparam1 (nprocs_v);
     CAMLlocal1 (res_v);
     int nprocs = Int_val (nprocs_v);
-    PSYSTEM_PROCESSOR_TIMES buf;
+    PSYSTEM_PROCESSOR_TIMES buf, b;
     size_t n = nprocs * sizeof (*buf);
-    int i;
+    int i, j;
 
     buf = _alloca (n);
     if (!buf) {
@@ -401,11 +271,19 @@ CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
 
     qsi (8, buf, n);
 
-    res_v = caml_alloc (nprocs * Double_wosize, Double_array_tag);
-    for (i = 0; i < nprocs; ++i) {
-        double d = buf[i].IdleTime.QuadPart * 1e-7;
+    res_v = caml_alloc (nprocs * 5 * Double_wosize, Double_array_tag);
+    b = buf;
+    for (i = 0, j = 0; i < nprocs; ++i, ++b) {
+        double d = b->IdleTime.QuadPart * 1e-7;
 
-        Store_double_field (res_v, i, d);
+        Store_double_field (res_v, j, d); j += 1;
+
+        d = b->KernelTime.QuadPart * 1e-7 - d;
+        Store_double_field (res_v, j, d); j += 1;
+
+        Store_double_field (res_v, j, b->UserTime.QuadPart * 1e-7); j += 1;
+        Store_double_field (res_v, j, b->DpcTime.QuadPart * 1e-7); j += 1;
+        Store_double_field (res_v, j, b->InterruptTime.QuadPart * 1e-7); j += 1;
     }
     CAMLreturn (res_v);
 }
@@ -444,7 +322,7 @@ CAMLprim value ml_delay (value secs_v)
     CAMLreturn (Val_unit);
 }
 
-CAMLprim value ml_is_winnt (value unit_v)
+CAMLprim value ml_os_type (value unit_v)
 {
     CAMLparam1 (unit_v);
     OSVERSIONINFO ovi;
@@ -459,9 +337,363 @@ CAMLprim value ml_is_winnt (value unit_v)
         caml_failwith ("Only NT family of Windows is supported by APC");
     }
 
-    CAMLreturn (Val_true);
+    CAMLreturn (Val_int (WINDOWS_TAG));
 }
 
+#elif defined __sun__
+#define _POSIX_PTHREAD_SEMANTICS
+#include <alloca.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <sys/time.h>
+#include <sys/sysinfo.h>
+#include <kstat.h>
+#include <sys/stat.h>
+#include <signal.h>
+#include <string.h>
+#include <errno.h>
+
+static long get_nprocs (void)
+{
+    long nprocs = sysconf (_SC_NPROCESSORS_CONF);
+    if (nprocs <= 0) {
+        failwith_fmt ("sysconf (_SC_NPROCESSORS_CONF) = %ld: %s",
+                      nprocs, strerror (errno));
+    }
+    return nprocs;
+}
+
+CAMLprim value ml_get_nprocs (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLreturn (Val_int (get_nprocs ()));
+}
+
+CAMLprim value ml_solaris_kstat (value nprocs_v)
+{
+    /* Based on lib/cpustat.cc from sinfo package by Juergen Rinas */
+    CAMLparam1 (nprocs_v);
+    CAMLlocal1 (res_v);
+    int i = 0, j = 0;
+    int nprocs = Int_val (nprocs_v);
+    struct kstat_ctl *kc;
+    kstat_t *ksp;
+
+    kc = kstat_open ();
+    if (!kc) {
+        failwith_fmt ("kstat_open failed: %s", strerror (errno));
+    }
+
+    res_v = caml_alloc (nprocs * 4 * Double_wosize, Double_array_tag);
+    for (ksp = kc->kc_chain; ksp; ksp = ksp->ks_next) {
+        if (!strncmp (ksp->ks_name, "cpu_stat", 8)) {
+            cpu_stat_t cstat;
+
+            i += 1;
+            if (i > nprocs) {
+                failwith_fmt ("number of processors changed?");
+            }
+
+            if (kstat_read (kc, ksp, 0) == -1) {
+                failwith_fmt ("kstat_read (update) failed: %s", strerror (errno));
+            }
+
+            if (kstat_read (kc, ksp, &cstat) == -1) {
+                failwith_fmt ("kstat_read (read) failed: %s", strerror (errno));
+            }
+
+            Store_double_field (res_v, j, cstat.cpu_sysinfo.cpu[0]); j += 1;
+            Store_double_field (res_v, j, cstat.cpu_sysinfo.cpu[1]); j += 1;
+            Store_double_field (res_v, j, cstat.cpu_sysinfo.cpu[2]); j += 1;
+            Store_double_field (res_v, j, cstat.cpu_sysinfo.cpu[3]); j += 1;
+        }
+    }
+
+    kstat_close (kc);
+    CAMLreturn (res_v);
+}
+
+CAMLprim value ml_os_type (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLreturn (Val_int (SOLARIS_TAG));
+}
+#elif defined __APPLE__
+#include <mach/mach.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+
+CAMLprim value ml_seticon (value data_v)
+{
+    CAMLparam1 (data_v);
+    CAMLreturn (Val_unit);
+}
+
+static long get_nprocs (void)
+{
+    int n, err;
+    size_t size;
+    int mib[] = { CTL_HW, HW_NCPU };
+
+    size = sizeof (int);
+    err = sysctl (mib, 2, &n, &size, NULL, 0);
+    if (err < 0) {
+        failwith_fmt ("sysctl (HW_NCPU) failed: %s", strerror (errno));
+    }
+    return n;
+}
+
+CAMLprim value ml_get_nprocs (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLreturn (Val_int (get_nprocs ()));
+}
+
+CAMLprim value ml_macosx_host_processor_info (value nprocs_v)
+{
+    CAMLparam1 (nprocs_v);
+    CAMLlocal1 (res_v);
+    int i, j = 0;
+    int nprocs = Int_val (nprocs_v);
+    unsigned int nprocs1;
+    kern_return_t kr;
+    processor_cpu_load_info_t cpu_load, c;
+    mach_msg_type_number_t cpu_msg_count;
+
+    kr = host_processor_info (mach_host_self (), PROCESSOR_CPU_LOAD_INFO,
+                              &nprocs1,
+                              (processor_info_array_t *) &cpu_load,
+                              &cpu_msg_count);
+    if (kr != KERN_SUCCESS) {
+        failwith_fmt ("host_processor_info failed: %s",
+                      mach_error_string (kr));
+    }
+
+    if (nprocs1 != nprocs){
+        failwith_fmt ("host_processor_info claims CPUs=%d expected %d",
+                      nprocs1, nprocs);
+    }
+
+    res_v = caml_alloc (nprocs * 4 * Double_wosize, Double_array_tag);
+    c = cpu_load;
+    for (i = 0; i < nprocs; ++i, ++c) {
+        Store_double_field (res_v, j, c->cpu_ticks[CPU_STATE_IDLE]); j += 1;
+        Store_double_field (res_v, j, c->cpu_ticks[CPU_STATE_USER]); j += 1;
+        Store_double_field (res_v, j, c->cpu_ticks[CPU_STATE_SYSTEM]); j += 1;
+        Store_double_field (res_v, j, c->cpu_ticks[CPU_STATE_NICE]); j += 1;
+    }
+
+    kr = vm_deallocate (mach_task_self (), (vm_address_t) cpu_load,
+                        cpu_msg_count * sizeof (*cpu_load));
+    if (kr != KERN_SUCCESS) {
+        failwith_fmt ("vm_deallocate failed: %s", mach_error_string (kr));
+    }
+    CAMLreturn (res_v);
+}
+
+CAMLprim value ml_os_type (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLreturn (Val_int (MACOSX_TAG));
+}
 #else
 #error This operating system is not supported
+#endif
+
+#if defined __linux__ || defined __sun__
+#include <X11/X.h>
+#include <X11/Xmd.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+
+#include <GL/glx.h>
+
+struct X11State {
+    Display *dpy;
+    Window id;
+    Atom property;
+    int error;
+};
+
+CAMLprim value ml_seticon (value data_v)
+{
+    CAMLparam1 (data_v);
+    static struct X11State static_state;
+    struct X11State *s = &static_state;
+    void *ptr = String_val (data_v);
+    CARD32 *p = ptr;
+    unsigned char *data = ptr;
+
+    if (!s->error) {
+        if (!s->dpy) {
+            s->dpy = XOpenDisplay (NULL);
+            if (!s->dpy) {
+                goto err0;
+            }
+            else {
+                /* "tiny bit" hackish */
+                s->id = glXGetCurrentDrawable ();
+                if (s->id == None) {
+                    goto err1;
+                }
+
+                s->property = XInternAtom (s->dpy, "_NET_WM_ICON", False);
+                if (s->property == None){
+                    goto err1;
+                }
+
+#ifdef DEBUG
+                printf ("id = %#x, property = %d\n",
+                        (int) s->id, (int) s->property);
+#endif
+            }
+        }
+    }
+    else {
+        CAMLreturn (Val_unit);
+    }
+
+    p[0] = 32;
+    p[1] = 32;
+    XChangeProperty (s->dpy, s->id, s->property, XA_CARDINAL,
+                     32, PropModeReplace, data, 32 * 32 + 2);
+
+    CAMLreturn (Val_unit);
+
+ err1:
+    XCloseDisplay (s->dpy);
+ err0:
+    s->error = 1;
+    CAMLreturn (Val_unit);
+}
+#endif
+
+#ifndef _WIN32
+CAMLprim value ml_waitalrm (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    sigset_t set;
+    int signr, ret, errno_code;
+
+    sigemptyset (&set);
+    sigaddset (&set, SIGALRM);
+
+    caml_enter_blocking_section ();
+    {
+        ret = sigwait (&set, &signr);
+        errno_code = errno;
+    }
+    caml_leave_blocking_section ();
+
+    if (ret) {
+        failwith_fmt ("sigwait: %s", strerror (errno_code));
+    }
+    CAMLreturn (Val_unit);
+}
+
+CAMLprim value ml_get_hz (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    long clk_tck;
+
+    clk_tck = sysconf (_SC_CLK_TCK);
+    if (clk_tck <= 0) {
+        failwith_fmt ("sysconf (SC_CLK_TCK): %s", strerror (errno));
+    }
+    CAMLreturn (Val_int (clk_tck));
+}
+
+CAMLprim value ml_delay (value secs_v)
+{
+    CAMLparam1 (secs_v);
+    failwith ("delay is not implemented on non-Windows");
+    CAMLreturn (Val_unit);
+}
+
+CAMLprim value ml_nice (value nice_v)
+{
+    CAMLparam1 (nice_v);
+    int niceval = Int_val (nice_v);
+
+#ifdef __linux__
+    errno = 0;
+#endif
+    if (nice (niceval) < 0) {
+#ifdef __linux__
+        if (errno)
+#endif
+            failwith_fmt ("nice %d: %s", niceval, strerror (errno));
+    }
+
+    CAMLreturn (Val_unit);
+}
+#endif
+
+#ifndef _WIN32
+CAMLprim value ml_windows_processor_times (value nprocs_v)
+{
+    CAMLparam1 (nprocs_v);
+    failwith ("ml_windows_processor_times is not implemented on non-Windows");
+    CAMLreturn (Val_unit);
+}
+#endif
+
+#ifndef __sun__
+CAMLprim value ml_solaris_kstat (value nprocs_v)
+{
+    CAMLparam1 (nprocs_v);
+    failwith ("ml_solaris_kstat is not implemented on non-Solaris");
+    CAMLreturn (Val_unit);
+}
+#endif
+
+#ifndef __APPLE__
+CAMLprim value ml_macosx_host_processor_info (value nprocs_v)
+{
+    CAMLparam1 (nprocs_v);
+    failwith ("ml_macosx_host_processor_info is not implemented on non-MacOSX");
+    CAMLreturn (Val_unit);
+}
+#endif
+
+#ifndef __linux__
+CAMLprim value ml_sysinfo (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLlocal2 (res_v, loads_v);
+    long nprocs;
+
+#ifdef _WIN32
+    nprocs = glob.nprocs;
+#else
+    nprocs = get_nprocs ();
+#endif
+
+    loads_v = caml_alloc_tuple (3);
+    Store_field (loads_v, 0, caml_copy_int64 (0));
+    Store_field (loads_v, 1, caml_copy_int64 (0));
+    Store_field (loads_v, 2, caml_copy_int64 (0));
+
+    res_v = caml_alloc_tuple (9);
+    Store_field (res_v, 0, 0);
+    Store_field (res_v, 1, loads_v);
+    Store_field (res_v, 2, 0);
+    Store_field (res_v, 3, 0);
+    Store_field (res_v, 4, 0);
+    Store_field (res_v, 5, 0);
+    Store_field (res_v, 6, 0);
+    Store_field (res_v, 7, 0);
+    Store_field (res_v, 8, nprocs);
+
+    CAMLreturn (res_v);
+}
+
+CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
+{
+    CAMLparam2 (fd_v, nprocs_v);
+    failwith_fmt ("idletimeofday is not implemented on non-Linux");
+    CAMLreturn (Val_unit);
+}
 #endif

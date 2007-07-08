@@ -1,10 +1,14 @@
-version = 0.98b
+version = 0.99
 
-.PHONY: all clean dist mod
+.PHONY: all clean dist mod opt
 .DEFAULT: all
 
+clibs =
+    if $(equal $(shell uname), SunOS)
+        value -cclib -lkstat
+
+Mocamlcc (ml_apc, -Wall -Werror -g -I/usr/X11R6/include)
 Mocamlc (apc, -warn-error A -g -thread -I +lablGL)
-Mocamlcc (ml_apc, -Wall -Werror -g)
 Mocamlopt (apc, -warn-error A -thread -I +lablGL)
 
 objs = ml_apc.o
@@ -15,14 +19,14 @@ section
     libs = $(addsuffix .cma, $(libs))
     flags = -thread -custom -I +lablGL
     apc.byte: $(cmos) $(objs)
-        ocamlc.opt $(flags) -o $@ $(libs) $(caml-sort $(cmos)) $(objs)
+        ocamlc.opt $(flags) -o $@ $(libs) $(caml-sort $(cmos)) $(objs) $(clibs)
 
 section
     cmxs = apc.cmx
     libs = $(addsuffix .cmxa, $(libs))
     flags = -thread -I +lablGL
     apc.opt: $(cmxs) $(objs) apc.o
-        ocamlopt.opt $(flags) -o $@ $(libs) $(caml-sort $(cmxs)) $(objs)
+        ocamlopt.opt $(flags) -o $@ $(libs) $(caml-sort $(cmxs)) $(objs) $(clibs)
 
 mkdir -p mod
 add-project-directories ($(dirof OMakefile)/mod)
@@ -32,6 +36,7 @@ vmount (-l, $(dirof OMakefile)/mod, mod)
         make
 
 all: apc.byte
+opt: apc.opt
 
 apc-$(version).tgz: $(shell cat FILES)
     rm -fr apc-$(version)

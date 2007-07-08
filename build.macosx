@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -e
+
+libs="unix.cma lablgl.cma lablglut.cma threads.cma"
+flags="-custom -thread -I +lablGL -ccopt -I/usr/X11R6/include"
+
+ocamlc -o apc $flags $libs ml_apc.c apc.ml
+cc -o hog hog.c

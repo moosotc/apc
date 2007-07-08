@@ -1,0 +1,3 @@
+Tested on Solaris 10 (X86_64 32bit mode)
+SMP - tested (AMD X2 - i.e. 2 CPUs)
+Kernel accounting _appears_ to be accurate

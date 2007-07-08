@@ -1,9 +1,10 @@
-/* gcc -o hog hog.c */
-#define _GNU_SOURCE
-#include <err.h>
+/* cc -o hog hog.c */
+#define _POSIX_PTHREAD_SEMANTICS
 #include <time.h>
 #include <stdio.h>
-#include <sched.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <string.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -27,26 +28,45 @@ static unsigned long hog (unsigned long niters)
     return niters;
 }
 
+static void err (int status, const char *fmt, ...)
+{
+    va_list ap;
+    int errno_code = errno;
+
+    va_start (ap, fmt);
+    vfprintf (stderr, fmt, ap);
+    va_end (ap);
+    fprintf (stderr, ": %s\n", strerror (errno_code));
+    exit (status);
+}
+
 int main (void)
 {
     unsigned int i;
     struct itimerval it;
+    struct sigaction act;
     sigset_t set;
     unsigned long v[HIST];
     double tmp = 0.0;
     unsigned long n;
+
+    act.sa_handler = sighandler;
+    if (sigemptyset (&act.sa_mask)) {
+        err (EXIT_FAILURE, "sigemptyset failed");
+    }
+    act.sa_flags = 0;
 
     it.it_interval.tv_sec = 0;
     it.it_interval.tv_usec = 1;
     it.it_value.tv_sec = 0;
     it.it_value.tv_usec = 1;
 
-    if (signal (SIGALRM, &sighandler)) {
-        err (EXIT_FAILURE, "failed to set signal handler");
+    if (sigaction (SIGALRM, &act, NULL)) {
+        err (EXIT_FAILURE, "sigaction failed");
     }
 
     if (setitimer (ITIMER_REAL, &it, NULL)) {
-        err (EXIT_FAILURE, "failed to set interval timer");
+        err (EXIT_FAILURE, "setitimer failed");
     }
 
     hog (ULONG_MAX);
@@ -62,11 +82,11 @@ int main (void)
     n = tmp - (tmp / 3);
 
     if (sigemptyset (&set)) {
-        err (EXIT_FAILURE, "failed to empty sigset");
+        err (EXIT_FAILURE, "sigemptyset failed");
     }
 
     if (sigaddset (&set, SIGALRM)) {
-        err (EXIT_FAILURE, "failed to add to sigset");
+        err (EXIT_FAILURE, "sigaddset failed");
     }
 
     for (;;) {
@@ -74,9 +94,7 @@ int main (void)
 
         hog (n);
         if (sigwait (&set, &signr)) {
-            err (EXIT_FAILURE, "failed to wait for a signal");
+            err (EXIT_FAILURE, "sigwait failed");
         }
     }
-
-    return 0;
 }

@@ -4,9 +4,14 @@ OMakeroot
 mod/Makefile
 mod/itc-mod.c
 ml_apc.c
-build.sh
+build.linux
+build.solaris
+build.macosx
 build.bat
 README
+README.solaris
+README.macosx
+README.windows
 Thanks
 FILES
 Changes
