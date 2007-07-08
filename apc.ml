@@ -135,7 +135,7 @@ end
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.97a"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.97b"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -201,7 +201,7 @@ module Args = struct
     then
       "-" ^ opt, Arg.Clear r, pad 9 "" ^ doc |> dB |< r
     else
-      "-" ^ opt, Arg.Clear r, pad 9 "" ^ doc |> dcB |< r
+      "-" ^ opt, Arg.Set r, pad 9 "" ^ doc |> dcB |< r
 
   let init () =
     let opts =

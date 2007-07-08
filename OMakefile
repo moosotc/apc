@@ -1,4 +1,4 @@
-version = 0.97a
+version = 0.97b
 
 ocaml-includes = -I +lablGL
 
