@@ -203,7 +203,7 @@ end
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.98a"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.98b"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -729,7 +729,11 @@ module Bar(T: sig val barw : int val bars : int end) = struct
           ; (0.0, 0.0, 1.0), kload.nice
           ; (1.0, 0.0, 0.0), kload.sys
           ; (1.0, 1.0, 1.0), kload.intr
-          ; (0.75, 0.5, 0.5), (1.0 -. kload.iowait) -. kload.all
+          ; (0.75, 0.5, 0.5),
+            let sum = kload.user +. kload.nice +. kload.sys
+              +. kload.intr +. kload.softirq
+            in
+              (1.0 -. kload.iowait) -. sum
           ]
       else
         aux `k [ (1.0, 0.0, 0.0), 1.0 -. kload.idle ]
@@ -1092,10 +1096,15 @@ let opendev path =
             path s1 s2 |< Unix.error_message Unix.ENOENT;
           exit 100
 
+      | Unix.Unix_error (Unix.EALREADY, s1, s2) ->
+          eprintf "Could not open ITC device %S:\n%s(%s): %s\n"
+            path s1 s2 |< Unix.error_message Unix.EALREADY;
+          eprintf "(perhaps modules is already in use?)@.";
+          exit 100
+
       | Unix.Unix_error (error, s1, s2) ->
           eprintf "Could not open ITC device %S:\n%s(%s): %s\n"
             path s1 s2 |< Unix.error_message error;
-          eprintf "(perhaps modules is already in use?)@.";
           exit 100
 
       | exn ->
@@ -1206,7 +1215,7 @@ let main () =
                   |> print_endline)
               in
               let load = add_stat load cpuload in
-                sampler.update t1 t2 0.0 load.all;
+                sampler.update t1 t2 0.0 cpuload.all;
                 loop2 load sample rest
         in
         let iload = loop2 zero_stat is ifuncs in
