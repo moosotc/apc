@@ -1,7 +1,18 @@
+4
+ * Better working gzh mode (though still not satisfactory)
+
+ * No lables/bars mode
+
+ * Filled area mode
+
+ * Decouple Graph.funcs from samplers
+
+ * Hackish NETWM icon creation
+
 3
  * Somewhat working gzh mode
 
- * `/proc/uptime' sampler (applicable only on uniprocessors)
+ * `/proc/uptime' sampler (only useful on uniprocessors)
 
  * Proper sampling (+1)
 

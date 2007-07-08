@@ -2,16 +2,27 @@
 This is APC - graphical CPU load meter.
 
 It is more suitable/accurate in situations where applications generate
-"short"  bursts of activity and the  frequency  of said bursts divides
-kernel HZ value evenly.
+"short" periodic bursts of activity.
 
 Kernel can use variety of values for HZ (most frequent: 100 250 1000)
 
 PAL/SECAM video frame grabbers do so with  25/50 FPS frequency, if the
-pulse  leads  to some  application deciding to  burn CPU  (putting the
-frame on the screen, encoding it, etc)  chances are good that the load
-you will   see in top(1)   (or anything `/proc/stat'  based) would not
-represent reality accurately. Ditto for plain video clips.
+pulse leads to   some application deciding  to  burn CPU (putting  the
+frame on the screen, encoding it, etc) chances  are good that the load
+you will  see  in top(1)  (or anything  `/proc/stat' based) would  not
+represent reality  accurately. Ditto for plain  video clips playing at
+25 fps.
+
+When   frequency of aforementioned    bursts  devides HZ value  evenly
+reading `/proc/stat'  or `/proc/uptime'  can  make an  impression that
+sometimes machine gets loaded for a brief period of time but then goes
+idle again (for a while) then the cycle repeats. This is not the case,
+the machine  is constantly loaded (well  according to ad-hoc measuring
+via background niced process and/or APC)
+
+If this line of thinking is correct one can not notice any load at all
+while watching  NTSC  content  (30fps - does not  divide  100/250/1000
+evenly)
 
 Furthermore `/proc/stat'  exports monotonically increasing  load times
 but _NOT_  real time[1], so  there's omni-present sub-jiffy error. Not

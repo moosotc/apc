@@ -142,3 +142,66 @@ CAMLprim value ml_nice (value nice_v)
 
     CAMLreturn (Val_unit);
 }
+
+#include <X11/X.h>
+#include <X11/Xmd.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+
+#include <GL/glx.h>
+
+struct X11State {
+    Display *dpy;
+    Window id;
+    Atom property;
+    int error;
+};
+
+CAMLprim value ml_seticon (value data_v)
+{
+    CAMLparam1 (data_v);
+    static struct X11State static_state;
+    struct X11State *s = &static_state;
+    void *ptr = String_val (data_v);
+    CARD32 *p = ptr;
+    unsigned char *data = ptr;
+
+    if (!s->error) {
+        if (!s->dpy) {
+            s->dpy = XOpenDisplay (NULL);
+            if (!s->dpy) {
+                goto err0;
+            }
+            else {
+                /* "tiny bit" hackish */
+                s->id = glXGetCurrentDrawable ();
+                if (s->id == None) {
+                    goto err1;
+                }
+
+                s->property = XInternAtom (s->dpy, "_NET_WM_ICON", False);
+                if (s->property == None){
+                    goto err1;
+                }
+
+#ifdef DEBUG
+                printf ("id = %#x, property = %d\n",
+                        (int) s->id, (int) s->property);
+#endif
+            }
+        }
+    }
+
+    p[0] = 32;
+    p[1] = 32;
+    XChangeProperty (s->dpy, s->id, s->property, XA_CARDINAL,
+                     32, PropModeReplace, data, 32 * 32 + 2);
+
+    CAMLreturn (Val_unit);
+
+ err1:
+    XCloseDisplay (s->dpy);
+ err0:
+    s->error = 1;
+    CAMLreturn (Val_unit);
+}

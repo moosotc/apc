@@ -29,12 +29,12 @@ module NP = struct
   external get_hz : unit -> int = "ml_get_hz"
   external setnice : int -> unit = "ml_nice"
 
-  let user = 0
-  let nice = 1
-  let sys = 2
-  let idle = 3
-  let iowait = 4
-  let intr = 5
+  let user    = 0
+  let nice    = 1
+  let sys     = 2
+  let idle    = 3
+  let iowait  = 4
+  let intr    = 5
   let softirq = 6
 
   let hz = get_hz () |> float
@@ -58,8 +58,8 @@ module NP = struct
         then pos
         else
           if String.get s pos = ' '
-        then succ pos |> skipws
-        else pos
+          then succ pos |> skipws
+          else pos
       in skipws pos
     in
     let endpos =
@@ -109,93 +109,36 @@ module NP = struct
       "./"
 end
 
-module Gzh = struct
-  let lim = ref 0
-  let stop = ref false
-  let refdt = ref 0.0
-
-  let rec furious_cycle i =
-    if not !stop && i > 0
-    then pred i |> furious_cycle
-    else (i, Unix.gettimeofday ())
-
-  let init verbose =
-    let t = 1e-6 in
-    let it = { Unix.it_interval = t; it_value = t } in
-    let handler =
-      let n = ref 10 in
-        fun _ ->
-          decr n;
-          stop := !n = 0;
-    in
-    let sign = Sys.sigalrm in
-    let oldh = Sys.signal sign |< Sys.Signal_handle handler in
-    let oldi = Unix.setitimer Unix.ITIMER_REAL it in
-    let oldbp = Unix.sigprocmask Unix.SIG_BLOCK [sign] in
-    let () = NP.waitalrm () in
-    let () = stop := false in
-    let () = NP.setnice 20 in
-    let oldup = Unix.sigprocmask Unix.SIG_UNBLOCK [sign] in
-    let t1 = Unix.gettimeofday () in
-    let n, t2 = furious_cycle max_int in
-    let () = refdt := t2 -. t1 in
-    let () = lim := max_int - n in
-    let () = if verbose then
-        begin
-          printf "completed %d iterations in %f seconds@." !lim !refdt
-        end in
-    let () = NP.setnice ~-20 in
-    let _ = Unix.sigprocmask Unix.SIG_UNBLOCK oldup in
-    let _ = Unix.setitimer Unix.ITIMER_REAL oldi in
-    let _ = Unix.sigprocmask Unix.SIG_BLOCK oldbp in
-    let _ = Sys.signal sign oldh in
-      ()
-  ;;
-
-  let gen f =
-    let thf () =
-      NP.setnice 20;
-      stop := false;
-      let rec loop t1 =
-        let _, t2 = furious_cycle !lim in
-        let dt = t2 -. t1 in
-          dt /. !refdt |> f;
-          loop t2
-      in
-        Unix.gettimeofday () |> loop
-    in
-    let _ = Thread.create thf () in
-      ()
-  ;;
-end
-
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.93"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.94"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
 
-  let freq = ref 1.0
+  let freq     = ref 1.0
   let interval = ref 15.0
-  let devpath = NP.getselfdir () |> Filename.concat |< "itc" |> ref
-  let pgrid = ref 10
-  let sgrid = ref 10
-  let w = ref 400
-  let h = ref 200
-  let verbose = ref false
-  let delay = ref 0.04
+  let devpath  = NP.getselfdir () |> Filename.concat |< "itc" |> ref
+  let pgrid    = ref 10
+  let sgrid    = ref 10
+  let w        = ref 400
+  let h        = ref 200
+  let verbose  = ref false
+  let delay    = ref 0.04
   let ksampler = ref true
-  let barw = ref 100
-  let bars = ref 50
-  let sigway = ref true
-  let niceval = ref 0
-  let gzh = ref false
+  let barw     = ref 100
+  let bars     = ref 50
+  let sigway   = ref true
+  let niceval  = ref 0
+  let gzh      = ref false
   let scalebar = ref false
-  let timer = ref 100
-  let debug = ref false
-  let polys = ref false
-  let uptime = ref false
+  let timer    = ref 100
+  let debug    = ref false
+  let poly     = ref false
+  let uptime   = ref false
+  let icon     = ref false
+  let labels   = ref true
+  let mgrid    = ref false
 
   let pad n s =
     let l = String.length s in
@@ -247,18 +190,89 @@ module Args = struct
       ; sS "d" devpath "path to itc device"
       ; cB "k" ksampler "do not use `/proc/stat'"
       ; sB "g" gzh "gzh way (does not quite work yet)"
-      ; sB "u" uptime
-        "use `/proc/uptime' instead of `/proc/stat` (UniProcessor only)"
+      ; sB "u" uptime "use `/proc/uptime' instead of `/proc/stat` (UP only)"
       ; sB "v" verbose "verbose"
       ; sB "S" sigway "sigwait delay method"
       ; sB "c" scalebar "constant bar width"
-      ; sB "P" polys "use polygons"
+      ; sB "P" poly "use filled area instead of lines"
+      ; sB "I" icon "use icon (hack)"
+      ; cB "l" labels "do not draw labels"
+      ; sB "m" mgrid "moving grid"
       ]
       (fun s ->
         "don't know what to do with " ^ s |> prerr_endline;
         exit 100
       )
       banner
+end
+
+module Gzh = struct
+  let lim = ref 0
+  let stop = ref false
+  let refdt = ref 0.0
+
+  let rec furious_cycle i =
+    if not !stop && i > 0
+    then pred i |> furious_cycle
+    else (i, Unix.gettimeofday ())
+
+  let init verbose =
+    let t = 0.5 in
+    let it = { Unix.it_interval = t; it_value = t } in
+    let tries = 1 in
+    let handler =
+      let n = ref tries in
+        fun _ ->
+          decr n;
+          stop := !n = 0;
+    in
+    let sign = Sys.sigalrm in
+    let oldh = Sys.signal sign |< Sys.Signal_handle handler in
+    let oldi = Unix.setitimer Unix.ITIMER_REAL it in
+    let oldbp = Unix.sigprocmask Unix.SIG_BLOCK [sign] in
+    let () = NP.waitalrm () in
+    let () = stop := false in
+    let oldup = Unix.sigprocmask Unix.SIG_UNBLOCK [sign] in
+    let t1 = Unix.gettimeofday () in
+    let n, t2 = furious_cycle max_int in
+    let () = refdt := t2 -. t1 in
+    let () = lim := tries * (max_int - n) in
+    let () = if verbose then
+        begin
+          printf "Completed %d iterations in %f seconds@." !lim !refdt
+        end in
+    let _ = Unix.sigprocmask Unix.SIG_UNBLOCK oldup in
+    let _ = Unix.setitimer Unix.ITIMER_REAL oldi in
+    let _ = Unix.sigprocmask Unix.SIG_BLOCK oldbp in
+    let _ = Sys.signal sign oldh in
+      ()
+  ;;
+
+  let gen f =
+    let thf () =
+      NP.setnice 20;
+      stop := false;
+      let l = ref 0 in
+      let rec loop t1 =
+        let _, t2 = furious_cycle !lim in
+        let dt = t2 -. t1 in
+          incr l;
+          if !Args.debug && !l > 10
+          then
+            begin
+              printf "Completed %d iterations in %f seconds load %f@."
+                !lim dt |< !refdt /. dt;
+              l := 0;
+            end
+          ;
+          !refdt /. dt |> f;
+          loop t2
+      in
+        Unix.gettimeofday () |> loop
+    in
+    let _ = Thread.create thf () in
+      ()
+  ;;
 end
 
 let oohz oohz fn =
@@ -298,6 +312,12 @@ module Delay = struct
       with Unix.Unix_error (Unix.EINTR, _, _) -> ()
 end
 
+type sampler =
+    { color : Gl.rgb;
+      getyielder : unit -> unit -> float option;
+      update : float -> float -> float -> float -> unit;
+    }
+
 module Sampler(T : sig val nsamples : int val freq : float end) =
 struct
   let nsamples = T.nsamples + 1
@@ -319,7 +339,8 @@ struct
     let () = loop !head n in
     let () = head := (!head + n) mod nsamples in
     let () = active := min (!active + n) nsamples in
-      ()
+      ();
+  ;;
 
   let getyielder () =
     let tail =
@@ -339,7 +360,8 @@ struct
         end
     in
       ry := yield 0;
-      (fun () -> !ry ())
+      (fun () -> !ry ());
+  ;;
 
   let update t1 t2 i1 i2 =
     let d = t2 -. t1 in
@@ -347,6 +369,7 @@ struct
     let isamples = d /. T.freq |> truncate in
     let l = 1.0 -. (i /. d) in
       update l isamples;
+  ;;
 end
 
 module type ViewSampler =
@@ -354,12 +377,6 @@ sig
   val getyielder : unit -> unit -> float option
   val update : float -> float -> float -> float -> unit
 end
-
-type sampler =
-    { color : Gl.rgb;
-      getyielder : unit -> unit -> float option;
-      update : float -> float -> float -> float -> unit;
-    }
 
 module type View =
 sig
@@ -383,18 +400,18 @@ module View(V: sig val w : int val h : int end) = struct
     if key = 27 || key = Char.code 'q'
     then exit 0
 
-  let add f =
-    funcs := f :: !funcs
+  let add dri =
+    funcs := dri :: !funcs
 
   let display () =
     GlClear.clear [`color];
-    List.iter (fun (display, _) -> display ()) !funcs;
+    List.iter (fun (display, _, _) -> display ()) !funcs;
     Glut.swapBuffers ()
 
   let reshape ~w ~h =
     ww := w;
     wh := h;
-    List.iter (fun (_, reshape) -> reshape w h) !funcs;
+    List.iter (fun (_, reshape, _) -> reshape w h) !funcs;
     GlClear.clear [`color];
     GlMat.mode `modelview;
     GlMat.load_identity ();
@@ -410,17 +427,17 @@ module View(V: sig val w : int val h : int end) = struct
       Glut.initDisplayMode ~double_buffer:true ();
       Glut.initWindowSize V.w V.h
     in
-    let _ = Glut.createWindow "APC" in
+    let winid = Glut.createWindow "APC" in
       Glut.displayFunc display;
       Glut.reshapeFunc reshape;
       Glut.keyboardFunc keyboard;
-      GlDraw.color (1.0, 1.0, 0.0)
+      GlDraw.color (1.0, 1.0, 0.0);
+      winid;
+  ;;
 
-  let update =
-    Glut.postRedisplay
-
+  let inc () = List.iter (fun (_, _, inc) -> inc ()) !funcs
+  let update = Glut.postRedisplay
   let func = Glut.idleFunc
-
   let run = Glut.mainLoop
 end
 
@@ -575,9 +592,15 @@ module Graph (V: View) = struct
   let vh = ref 0
   let vx = ref 0
   let vy = ref 0
-  let fw = 3 * Glut.bitmapWidth font (Char.code '%')
-  let fh = 6
   let scale = V.freq /. V.interval
+  let gscale = 1.0 /. float V.sgrid
+  let nsamples = ref 0
+
+  let fw, fh =
+    if !Args.labels
+    then 3 * Glut.bitmapWidth font (Char.code '%'), 20
+    else 0, 10
+
   let gridlist =
     let base = GlList.gen_lists ~len:1 in
       GlList.nth base ~pos:0
@@ -586,47 +609,62 @@ module Graph (V: View) = struct
     let ox = if !Args.scalebar then 0 else !Args.barw in
     let x, y, w, h =
       match typ with
-        | `labels -> (!vx + ox, !vy + 5, fw, !vh - 20)
-        | `graph  -> (!vx + fw + 5 + ox, !vy + 5, !vw - fw - 10, !vh - 20)
+        | `labels -> (!vx + ox, !vy + 5, fw, !vh - fh)
+        | `graph  -> (!vx + fw + 5 + ox, !vy + 5, !vw - fw - 10, !vh - fh)
     in
-      GlDraw.viewport x y w h
+      GlDraw.viewport x y w h;
+  ;;
+
+  let sgrid () =
+    for i = 0 to V.sgrid
+    do
+      let x = if i = 0 then 0.0009 else float i *. gscale in
+        GlDraw.vertex ~x ~y:0.0 ();
+        GlDraw.vertex ~x ~y:1.0 ();
+    done;
+  ;;
 
   let grid () =
-    let scale = 1.0 /. float V.sgrid in
-      viewport `graph;
-      GlDraw.line_width 1.0;
-      GlDraw.color (0.0, 1.0, 0.0);
-      GlDraw.begins `lines;
-      for i = 0 to V.sgrid
-      do
-        let x = float i *. scale in
-        let x = if i = 0 then 0.0009 else x in
-          GlDraw.vertex ~x ~y:0.0 ();
-          GlDraw.vertex ~x ~y:1.0 ();
-      done;
+    viewport `graph;
+    GlDraw.line_width 1.0;
+    GlDraw.color (0.0, 1.0, 0.0);
+    GlDraw.begins `lines;
+    if !Args.mgrid
+    then
+      begin
+        GlDraw.vertex2 (0.0009, 0.0);
+        GlDraw.vertex2 (0.0009, 1.0);
+        GlDraw.vertex2 (1.0000, 0.0);
+        GlDraw.vertex2 (1.0000, 1.0);
+      end
+    else
+      sgrid ()
+    ;
+    let () =
       let lim = 100 / V.pgrid in
-      let () =
         for i = 0 to lim
         do
           let y = (i * V.pgrid |> float) /. 100.0 in
           let y = if i = lim then y -. 0.0009 else y in
             GlDraw.vertex ~x:0.0 ~y ();
             GlDraw.vertex ~x:1.0 ~y ();
-        done
-      in
-      let () =
-        GlDraw.ends ();
-        viewport `labels;
-        GlDraw.color (1.0, 1.0, 1.0);
-      in
-      let ohp = 100.0 in
-        for i = 0 to 100 / V.pgrid
-        do
-          let p = i * V.pgrid in
-          let y = float p /. ohp in
-          let s = Printf.sprintf "%3d%%" p in
-            draw_string 1.0 y s
-        done
+        done;
+    in
+    let () = GlDraw.ends () in
+      if !Args.labels
+      then
+        begin
+          viewport `labels;
+          GlDraw.color (1.0, 1.0, 1.0);
+          let ohp = 100.0 in
+            for i = 0 to 100 / V.pgrid
+            do
+              let p = i * V.pgrid in
+              let y = float p /. ohp in
+              let s = Printf.sprintf "%3d%%" p in
+                draw_string 1.0 y s
+            done
+        end
   ;;
 
   let reshape w h =
@@ -645,15 +683,34 @@ module Graph (V: View) = struct
     Glut.swapBuffers |> oohz !Args.delay;
   ;;
 
+  let inc () = incr nsamples
+
+  let mgrid () =
+    GlDraw.line_width 1.0;
+    GlDraw.color (0.0, 1.0, 0.0);
+    GlDraw.begins `lines;
+    let offset =
+      ((pred !nsamples |> float) *. scale /. gscale |> modf |> fst) *. gscale
+    in
+      for i = 0 to pred V.sgrid
+      do
+        let x = offset +. float i *. gscale in
+          GlDraw.vertex ~x ~y:0.0 ();
+          GlDraw.vertex ~x ~y:1.0 ();
+      done;
+      GlDraw.ends ();
+  ;;
+
   let display () =
     GlList.call gridlist;
-    GlDraw.line_width 1.5;
     viewport `graph;
+    if !Args.mgrid then mgrid ();
+    GlDraw.line_width 1.5;
 
     let sample sampler =
       GlDraw.color sampler.color;
       let () =
-        if not !Args.polys
+        if not !Args.poly
         then GlDraw.begins `line_strip
         else
           begin
@@ -669,7 +726,7 @@ module Graph (V: View) = struct
                 GlDraw.vertex ~x ~y ();
                 loop opty (succ i)
           | None ->
-              if !Args.polys
+              if !Args.poly
               then
                 match last with
                   | None -> ()
@@ -680,10 +737,10 @@ module Graph (V: View) = struct
         loop None 0;
         GlDraw.ends ();
     in
-      List.iter sample V.samplers
+      List.iter sample V.samplers;
   ;;
 
-  let funcs = display, reshape
+  let funcs = display, reshape, inc
 end
 
 let getplacements w h n barw =
@@ -731,7 +788,7 @@ let create fd w h =
   in
   let ks = kget () in
 
-  let crgraph (kaccu, iaccu) (i, x, y) =
+  let crgraph (kaccu, iaccu, gaccu) (i, x, y) =
     let module Si = Sampler (S) in
     let isampler =
       { getyielder = Si.getyielder
@@ -756,28 +813,28 @@ let create fd w h =
             fun _ _ _ -> (0.0, !d)
         else
           if !Args.uptime
-        then
-          let (u1, i1) = NP.parse_uptime () in
-          let u1 = ref u1
-          and i1 = ref i1 in
-            fun _ _ _ ->
-              let (u2, i2) = NP.parse_uptime () in
-              let du = u2 -. !u1
-              and di = i2 -. !i1 in
-                u1 := u2;
-                i1 := i2;
-                (0.0, di /. du)
-        else
-          let i' = if i = NP.nprocs then 0 else succ i in
-          let n = NP.idle in
-          let g ks = Array.get ks i' |> snd |> Array.get |< n in
-          let i1 = g ks |> ref in
-            fun ks t1 t2 ->
-              let i2 = g ks in
-              let i1' = NP.jiffies_to_sec !i1
-              and i2' = NP.jiffies_to_sec i2 in
-                i1 := i2;
-                (i1', i2')
+          then
+            let (u1, i1) = NP.parse_uptime () in
+            let u1 = ref u1
+            and i1 = ref i1 in
+              fun _ _ _ ->
+                let (u2, i2) = NP.parse_uptime () in
+                let du = u2 -. !u1
+                and di = i2 -. !i1 in
+                  u1 := u2;
+                  i1 := i2;
+                  (0.0, di /. du)
+          else
+            let i' = if i = NP.nprocs then 0 else succ i in
+            let n = NP.idle in
+            let g ks = Array.get ks i' |> snd |> Array.get |< n in
+            let i1 = g ks |> ref in
+              fun ks t1 t2 ->
+                let i2 = g ks in
+                let i1' = NP.jiffies_to_sec !i1
+                and i2' = NP.jiffies_to_sec i2 in
+                  i1 := i2;
+                  (i1', i2')
       in
         calc, sampler
     in
@@ -808,13 +865,13 @@ let create fd w h =
     in
     let kaccu =
       if !Args.ksampler
-      then (i, kcalc, ksampler, Graph.funcs) :: kaccu
+      then (i, kcalc, ksampler) :: kaccu
       else kaccu
     in
-      kaccu, (i, icalc, isampler, Graph.funcs) :: iaccu
+      kaccu, (i, icalc, isampler) :: iaccu, Graph.funcs :: gaccu
   in
-  let kl, il = List.fold_left crgraph ([], []) placements in
-    ((if kl == [] then (fun () -> [||]) else kget), kl), (iget, il)
+  let kl, il, gl = List.fold_left crgraph ([], [], []) placements in
+    ((if kl == [] then (fun () -> [||]) else kget), kl), (iget, il), gl
 
 let opendev path =
   try
@@ -831,6 +888,62 @@ let opendev path =
           path s1 s2 |< Unix.error_message Unix.ENOENT;
         exit 100
 
+    | exn ->
+        eprintf "Could not open ITC device %S:\n%s\n"
+          path |< Printexc.to_string exn;
+        exit 100
+
+let seticon () =
+  let module X = struct external seticon : string -> unit = "ml_seticon" end in
+  let len = 32*4 in
+  let data = String.create |< 32*len + 2*4 in
+  let line r g b a =
+    let r = Char.chr r
+    and g = Char.chr g
+    and b = Char.chr b
+    and a = Char.chr a in
+    let s = String.create len in
+    let rec fill x =
+      if x = len
+      then s
+      else
+        begin
+          x + 0 |> String.set s |< b;
+          x + 1 |> String.set s |< g;
+          x + 2 |> String.set s |< r;
+          x + 3 |> String.set s |< a;
+          x + 4 |> fill
+        end
+    in
+      fill 0
+  in
+  let el = line 0x00 0x00 0x00 0xff
+  and kl = line 0xff 0x00 0x00 0xff
+  and il = line 0xff 0xff 0x00 0xff in
+  let fill l sy ey =
+    let src = l and dst = data and src_pos = 0 in
+    let rec loop n dst_pos =
+      if n > 0
+      then
+        begin
+          StringLabels.blit ~src ~src_pos ~dst ~dst_pos ~len;
+          pred n |> loop |< dst_pos + len
+        end
+    in
+      (ey - sy) |> loop |< (32 - ey) * len + 4*2
+  in
+    fun ~iload ~kload ->
+      let iy = iload *. 32.0 |> ceil |> truncate |> max 0 |> min 32
+      and ky = kload *. 32.0 |> ceil |> truncate |> max 0 |> min 32 in
+      let ey =
+        if ky < iy
+        then (fill kl 0 ky; fill il ky iy; iy)
+        else (fill kl 0 ky; ky)
+      in
+        fill el ey 32;
+        X.seticon data;
+;;
+
 let main () =
   let _ = Glut.init [|""|] in
   let () = Args.init () in
@@ -841,16 +954,21 @@ let main () =
   and h = !Args.h in
   let fd = opendev !Args.devpath in
   let module FullV = View (struct let w = w let h = h end) in
-  let () = FullV.init () in
-  let (kget, kfuncs), (iget, ifuncs) = create fd w h in
-  let module Bar =
-    Bar (struct let barw = !Args.barw let bars = !Args.bars end)
+  let _winid = FullV.init () in
+  let (kget, kfuncs), (iget, ifuncs), gl = create fd w h in
+  let bar_update =
+    List.iter FullV.add gl;
+    if !Args.barw > 0
+    then
+      let module Bar =
+        Bar (struct let barw = !Args.barw let bars = !Args.bars end)
+      in
+        FullV.add (Bar.display, Bar.reshape, fun _ -> ());
+        Bar.update
+    else
+      fun _ _ -> ()
   in
-  let () =
-    FullV.add (Bar.display, Bar.reshape);
-    List.iter (fun (_, _, _, gfuncs) -> FullV.add gfuncs) kfuncs;
-    List.iter (fun (_, _, _, gfuncs) -> FullV.add gfuncs) ifuncs;
-  in
+  let seticon = if !Args.icon then seticon () else fun ~iload ~kload -> () in
   let rec loop t1 () =
     let t2 = Unix.gettimeofday () in
     let dt = t2 -. t1 in
@@ -860,7 +978,7 @@ let main () =
         let ks = kget () in
         let rec loop2 load s = function
           | [] -> load
-          | (nr, calc, sampler, _) :: rest ->
+          | (nr, calc, sampler) :: rest ->
               let i1, i2 = calc s t1 t2 in
               let thisload = 1.0 -. ((i2 -. i1) /. dt) in
               let () =
@@ -883,7 +1001,9 @@ let main () =
               kload |> string_of_float |> prerr_endline;
             end
           ;
-          Bar.update kload iload;
+          seticon ~iload ~kload;
+          bar_update kload iload;
+          FullV.inc ();
           FullV.update ();
           FullV.func (Some (loop t2))
       else
