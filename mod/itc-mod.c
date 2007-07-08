@@ -11,8 +11,18 @@
 #include <linux/smp.h>
 #include <linux/mm.h>
 #include <linux/pm.h>
+
 #include <asm/system.h>
 #include <asm/uaccess.h>
+
+#ifdef CONFIG_6xx
+#include <asm/machdep.h>
+#define pm_idle ppc_md.power_save
+#endif
+
+#if !(defined CONFIG_X86 || defined CONFIG_6xx)
+#error Support for this architecture is not written yet
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 0)
     #include <linux/wrapper.h>
@@ -34,16 +44,18 @@
 
 MODULE_DESCRIPTION ("Idle time collector");
 
-/* there are many ways to prevent gcc from complaining about module_param
-   and function pointer vs long, but let's not */
 static void (*idle_func) (void);
 
+#ifdef CONFIG_X86
+/* there are many ways to prevent gcc from complaining about module_param
+   and function pointer vs long, but let's not */
 #if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 0)
 MODULE_PARM (idle_func, "l");
 #else
 module_param (idle_func, long, 0777);
 #endif
 MODULE_PARM_DESC (idle_func, "address of default idle function");
+#endif
 
 #define DEVNAME "itc"
 static spinlock_t lock = SPIN_LOCK_UNLOCKED;
@@ -216,6 +228,7 @@ itc_idle (void)
   struct timeval tv;
   unsigned long flags;
 
+  /* printk ("idle in\n"); */
   spin_lock_irqsave (&lock, flags);
   itc = &global_itc[smp_processor_id ()];
   do_gettimeofday (&itc->sleep_started);
@@ -253,6 +266,7 @@ itc_idle (void)
   cpeamb (&itc->cumm_sleep_time, &tv, &itc->sleep_started);
   itc->sleeping = 0;
   spin_unlock_irqrestore (&lock, flags);
+  /* printk ("idle out\n"); */
 }
 
 /**********************************************************************

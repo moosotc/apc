@@ -4,6 +4,12 @@ This is APC - graphical CPU load meter.
 It is more suitable/accurate in situations where applications generate
 "short" periodic bursts of activity.
 
+It works by timing the time spent in the kernels idle handler. CPU
+load time is taken to mean:
+     time spent in idle handler
+1 -  --------------------------
+        total time elapsed
+
 Kernel can use variety of values for HZ (most frequent: 100 250 1000)
 
 PAL/SECAM video frame grabbers do so with  25/50 FPS frequency, if the
@@ -43,12 +49,14 @@ Tested on[2]:
 Linux 2.4.30   - AMD Athlon(tm) Processor (1.4 Ghz)
 Linux 2.6.17.6 - AMD Athlon(tm)64 X2 Dual Core Processor  3800+
 Linux 2.6.18   - AMD Athlon(tm)64 3800+
+Linux 2.6.18.3 - PowerPC 7447A
 
 It's possible  that RMClock[3]  does something similar(load  measuring
 wise) on Microsoft Windows.
 
 [1] Unlike `/proc/uptime'. But this one is useless for SMP
-[2] SMP not tested on 2.4 kernels (nor QUIRK mode)
+[2] SMP not tested on 2.4 kernels, nor QUIRK mode. SMP on PPC wasn't
+    tested at all
 [3] http://cpu.rightmark.org/products/rmclock.shtml
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -70,6 +78,8 @@ $ sh build.sh
 $ cd mod
 $ su -c 'insmod ./its.ko' - 2.6 Kernels
 $ su -c 'insmod ./its.o'  - 2.4 Kernels
+
+Following applies only to Linux running on X86.
 
 If the module fails to load consult dmesg(8). Most likely cause is the
 lack  of  exported `default_idle'    function  and no   specific power
