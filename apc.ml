@@ -287,7 +287,7 @@ end
 module Args =
 struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 1.00"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 1.00a"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"

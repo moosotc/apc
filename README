@@ -102,7 +102,7 @@ Plus all what is required to build a kernel module.
 Process:
 
 <untar and go to directory with sources>
-$ sh build.sh
+$ sh build.linux
 
 # if following fails on X86 read bellow
 $ su -c 'insmod mod/its.ko' - 2.6 Kernels
