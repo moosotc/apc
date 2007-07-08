@@ -1,0 +1,50 @@
+version = 0.90
+
+ocaml-includes = -I +lablGL
+
+ocamlc-cflags += -g $(ocaml-includes) -thread
+ocamlopt-cflags += $(ocaml-includes) -thread
+
+ocamlc-lflags += -g $(ocaml-includes) -thread
+ocamlopt-lflags += $(ocaml-includes) -thread
+
+ocaml-libs = unix lablgl lablglut threads
+ocamlc-libs = $(addsuffix .cma, $(ocaml-libs))
+ocamlopt-libs = $(addsuffix .cmxa, $(ocaml-libs))
+
+section
+    target-flags += -Wno-long-long -I.
+    .SCANNER: %.o.scan: %.c
+        $(ocamlc) -ccopt $(quote $(c-cflags) \
+            -MT $* -M -MG $(target-flags)) $<
+
+    %.o: %.c :scanner: %.o.scan \
+        :value: $(c-digest-deps) :value: $(c-emit-stdmake-rule $@)
+        $(ocamlc) -ccopt $(quote -c $(target-flags) $(c-cflags)) $<
+
+    ml_apc.o:
+
+apc.byte: apc.cmo ml_apc.o
+    $(ocamlc) -custom $(ocamlc-lflags) $(ocamlc-libs) $(target-flags) -o $@ \
+    ml_apc.o apc.cmo
+
+apc.opt: apc.cmx apc.o ml_apc.o
+    $(ocamlopt) $(ocamlopt-lflags) $(ocamlopt-libs) $(target-flags) -o $@ \
+    apc.cmx ml_apc.o
+
+.PHONY: byte opt dist
+
+byte: apc.byte
+opt: apc.opt
+
+all: byte
+
+apc-$(version).tgz: $(shell cat FILES)
+    mkdir -p apc-$(version)
+    tar -T $(file FILES) -cf - -C $(dirof FILES) | tar xf - -C apc-$(version)
+    tar cfz $@ apc-$(version)
+
+dist: apc-$(version).tgz
+
+add-env2 (mod)
+.SUBDIRS: mod

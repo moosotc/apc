@@ -1,0 +1,9 @@
+.PHONY: mod
+
+release = $(shell uname -r)
+
+mkdir -p $(release)
+vmount (-l, $(dirof OMakefile), $(release))
+.SUBDIRS: $(release)
+    mod: Makefile its-mod.c
+        make
