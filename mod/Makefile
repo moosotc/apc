@@ -23,6 +23,9 @@ itc-objs := itc-mod.o
 
 ifdef TOPDIR
 obj-m := itc.o
+hack := $(shell $(CC) -print-search-dirs \
+	| sed -n 's;^install: \(.*\);\1/include;p;q')
+export CPATH := ${CPATH}:${hack}
 endif
 
 ifdef K24

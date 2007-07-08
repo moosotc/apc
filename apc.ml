@@ -28,6 +28,10 @@ module NP = struct
   external waitalrm : unit -> unit = "ml_waitalrm"
   external get_hz : unit -> int = "ml_get_hz"
   external setnice : int -> unit = "ml_nice"
+  external delay : float -> unit = "ml_delay"
+  external is_winnt : unit -> bool = "ml_is_winnt"
+
+  let winnt = is_winnt ()
 
   let user    = 0
   let nice    = 1
@@ -91,16 +95,35 @@ module NP = struct
       cpuname, Array.of_list vals
 
   let parse_stat () =
-    fun () ->
-      let ic = open_in "/proc/stat" in
-      let rec loop i accu =
-        if i = -1
-        then List.rev accu
-        else (input_line ic |> parse_cpul) :: accu |> loop (pred i)
-      in
-      let ret = loop nprocs [] in
-        close_in ic;
-        ret
+    if winnt
+    then
+      fun () ->
+        let ia = idletimeofday Unix.stdin nprocs in
+        let rec convert accu total n =
+          if n = nprocs
+          then
+            let t = total *. hz |> truncate in
+            let a = "cpu", Array.make 7 t in
+              a :: List.rev accu
+          else
+            let i = Array.get ia n in
+            let total = total +. i in
+            let t = i *. hz |> truncate in
+            let v = "cpu" ^ string_of_int n, Array.make 7 t in
+              convert |< v :: accu |< total |< succ n
+        in
+          convert [] 0.0 0
+    else
+      fun () ->
+        let ic = open_in "/proc/stat" in
+        let rec loop i accu =
+          if i = -1
+          then List.rev accu
+          else (input_line ic |> parse_cpul) :: accu |> loop (pred i)
+        in
+        let ret = loop nprocs [] in
+          close_in ic;
+          ret
 
   let getselfdir () =
     try
@@ -111,7 +134,7 @@ end
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.94"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.95"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -175,7 +198,7 @@ module Args = struct
     "-" ^ opt, Arg.Set_string r, pad 9 "<string> " ^ doc |> dS |< r
 
   let init () =
-    Arg.parse
+    let opts =
       [ sF "f" freq "sampling frequency in seconds"
       ; sF "D" delay "refresh delay in seconds"
       ; sF "i" interval "history interval in seconds"
@@ -188,9 +211,11 @@ module Args = struct
       ; sI "n" niceval "value to renice self on init"
       ; sI "t" timer "timer frequency in herz"
       ; sS "d" devpath "path to itc device"
-      ; cB "k" ksampler "do not use `/proc/stat'"
+      ; cB "k" ksampler |< "do not use kernel sampler"
+        ^ (if NP.winnt then "" else " (`/proc/[stat|uptime]')")
       ; sB "g" gzh "gzh way (does not quite work yet)"
-      ; sB "u" uptime "use `/proc/uptime' instead of `/proc/stat` (UP only)"
+      ; sB "u" uptime
+        "use `uptime' instead of `stat' as kernel sampler (UP only)"
       ; sB "v" verbose "verbose"
       ; sB "S" sigway "sigwait delay method"
       ; sB "c" scalebar "constant bar width"
@@ -199,11 +224,24 @@ module Args = struct
       ; cB "l" labels "do not draw labels"
       ; sB "m" mgrid "moving grid"
       ]
-      (fun s ->
-        "don't know what to do with " ^ s |> prerr_endline;
-        exit 100
-      )
-      banner
+    in
+    let opts =
+      if NP.winnt
+      then
+        begin
+          let nixopts = ["-n"; "-u"; "-d"; "-I"; "-S"; "-g"] in
+            prerr_endline "Only kernel sampler is available on Windows";
+            List.filter (fun (s, _, _) -> List.mem s nixopts |> not) opts
+        end
+      else
+        opts
+    in
+      Arg.parse opts
+        (fun s ->
+          "don't know what to do with " ^ s |> prerr_endline;
+          exit 100
+        )
+        banner
 end
 
 module Gzh = struct
@@ -290,26 +328,41 @@ let oohz oohz fn =
 module Delay = struct
   let sighandler signr = ()
 
+  let winfreq = ref 0.0
+
   let init freq gzh =
-    let () =
-      Sys.Signal_handle sighandler |> Sys.set_signal Sys.sigalrm;
-      if !Args.sigway
-      then
-        let l = if gzh then [Sys.sigprof; Sys.sigvtalrm] else [] in
-          Unix.sigprocmask Unix.SIG_BLOCK |< Sys.sigalrm :: l |> ignore;
+    if NP.winnt
+    then
+      winfreq := 1.0 /. float freq
+    else
+      let () =
+        Sys.Signal_handle sighandler |> Sys.set_signal Sys.sigalrm;
+        if !Args.sigway
+        then
+          let l = if gzh then [Sys.sigprof; Sys.sigvtalrm] else [] in
+            Unix.sigprocmask Unix.SIG_BLOCK |< Sys.sigalrm :: l |> ignore;
       ;
-    in
-    let v = 1.0 /. float freq in
-    let t = { Unix.it_interval = v; it_value = v } in
-    let _ = Unix.setitimer Unix.ITIMER_REAL t in
-      ()
+      in
+      let v = 1.0 /. float freq in
+      let t = { Unix.it_interval = v; it_value = v } in
+      let _ = Unix.setitimer Unix.ITIMER_REAL t in
+        ()
 
   let delay () =
-    if !Args.sigway
-    then NP.waitalrm ()
+    if NP.winnt
+    then
+      NP.delay !winfreq
     else
-      try let _ = Unix.select [] [] [] ~-.1.0 in ()
-      with Unix.Unix_error (Unix.EINTR, _, _) -> ()
+      begin
+        if !Args.sigway
+        then
+          NP.waitalrm ()
+        else
+          begin
+            try let _ = Unix.select [] [] [] ~-.1.0 in ()
+            with Unix.Unix_error (Unix.EINTR, _, _) -> ()
+          end
+      end
 end
 
 type sampler =
@@ -874,24 +927,28 @@ let create fd w h =
     ((if kl == [] then (fun () -> [||]) else kget), kl), (iget, il), gl
 
 let opendev path =
-  try
-    Unix.openfile path [Unix.O_RDONLY] 0
-  with
-    | Unix.Unix_error (Unix.ENODEV, s1, s2) ->
-        eprintf "Could not open ITC device %S:\n%s(%s): %s)\n"
-          path s1 s2 |< Unix.error_message Unix.ENODEV;
-        eprintf "(perhaps the module is not loaded?)@.";
-        exit 100
+  if NP.winnt
+  then
+    Unix.stdout
+  else
+    try
+      Unix.openfile path [Unix.O_RDONLY] 0
+    with
+      | Unix.Unix_error (Unix.ENODEV, s1, s2) ->
+          eprintf "Could not open ITC device %S:\n%s(%s): %s)\n"
+            path s1 s2 |< Unix.error_message Unix.ENODEV;
+          eprintf "(perhaps the module is not loaded?)@.";
+          exit 100
 
-    | Unix.Unix_error (Unix.ENOENT, s1, s2) ->
-        eprintf "Could not open ITC device %S:\n%s(%s): %s\n"
-          path s1 s2 |< Unix.error_message Unix.ENOENT;
-        exit 100
+      | Unix.Unix_error (Unix.ENOENT, s1, s2) ->
+          eprintf "Could not open ITC device %S:\n%s(%s): %s\n"
+            path s1 s2 |< Unix.error_message Unix.ENOENT;
+          exit 100
 
-    | exn ->
-        eprintf "Could not open ITC device %S:\n%s\n"
-          path |< Printexc.to_string exn;
-        exit 100
+      | exn ->
+          eprintf "Could not open ITC device %S:\n%s\n"
+            path |< Printexc.to_string exn;
+          exit 100
 
 let seticon () =
   let module X = struct external seticon : string -> unit = "ml_seticon" end in
@@ -981,6 +1038,7 @@ let main () =
           | (nr, calc, sampler) :: rest ->
               let i1, i2 = calc s t1 t2 in
               let thisload = 1.0 -. ((i2 -. i1) /. dt) in
+              let thisload = max 0.0 thisload in
               let () =
                 if !Args.verbose
                 then

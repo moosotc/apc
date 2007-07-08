@@ -8,16 +8,12 @@
 #include <caml/mlvalues.h>
 #include <caml/bigarray.h>
 
-#include <alloca.h>
-#include <unistd.h>
-#include <stdarg.h>
 #include <stdio.h>
-#include <sys/time.h>
-#include <sys/time.h>
-#include <sys/sysinfo.h>
-#include <signal.h>
-#include <string.h>
-#include <errno.h>
+#include <stdarg.h>
+
+#ifdef _MSC_VER
+#define vsnprintf _vsnprintf
+#endif
 
 static void failwith_fmt (const char *fmt, ...) Noreturn;
 static void failwith_fmt (const char *fmt, ...)
@@ -31,6 +27,16 @@ static void failwith_fmt (const char *fmt, ...)
 
     failwith (buf);
 }
+
+#if defined __linux__
+#include <alloca.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <sys/time.h>
+#include <sys/sysinfo.h>
+#include <signal.h>
+#include <string.h>
+#include <errno.h>
 
 CAMLprim value ml_waitalrm (value unit_v)
 {
@@ -205,3 +211,252 @@ CAMLprim value ml_seticon (value data_v)
     s->error = 1;
     CAMLreturn (Val_unit);
 }
+
+CAMLprim value ml_delay (value secs_v)
+{
+    CAMLparam1 (secs_v);
+    failwith ("delay is not implemented on non-Windows");
+    CAMLreturn (Val_unit);
+}
+
+CAMLprim value ml_is_winnt (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLreturn (Val_false);
+}
+
+#elif defined _WIN32
+
+#pragma warning (disable:4152 4127 4189)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#define DDKFASTAPI __fastcall
+#define NTSTATUS long
+#define BOOLEAN int
+
+/* Following (mildly modified) structure definitions, macros, enums,
+   etc are taken from binutils w32api (http://sourceware.org/binutils/)
+   Headers claim:
+ */
+/*
+ * ntpoapi.h
+ * ntddk.h
+ ...
+ * This file is part of the w32api package.
+ *
+ * Contributors:
+ *   Created by Casper S. Hornstrup <chorns@users.sourceforge.net>
+ *
+ * THIS SOFTWARE IS NOT COPYRIGHTED
+ *
+ * This source code is offered for use in the public domain. You may
+ * use, modify or distribute it freely.
+ *
+ * This code is distributed in the hope that it will be useful but
+ * WITHOUT ANY WARRANTY. ALL WARRANTIES, EXPRESS OR IMPLIED ARE HEREBY
+ * DISCLAIMED. This includes but is not limited to warranties of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ */
+
+typedef struct _SYSTEM_BASIC_INFORMATION {
+    ULONG  Unknown;
+    ULONG  MaximumIncrement;
+    ULONG  PhysicalPageSize;
+    ULONG  NumberOfPhysicalPages;
+    ULONG  LowestPhysicalPage;
+    ULONG  HighestPhysicalPage;
+    ULONG  AllocationGranularity;
+    ULONG  LowestUserAddress;
+    ULONG  HighestUserAddress;
+    ULONG  ActiveProcessors;
+    UCHAR  NumberProcessors;
+} SYSTEM_BASIC_INFORMATION, *PSYSTEM_BASIC_INFORMATION;
+
+typedef struct _SYSTEM_PROCESSOR_TIMES {
+    LARGE_INTEGER  IdleTime;
+    LARGE_INTEGER  KernelTime;
+    LARGE_INTEGER  UserTime;
+    LARGE_INTEGER  DpcTime;
+    LARGE_INTEGER  InterruptTime;
+    ULONG  InterruptCount;
+} SYSTEM_PROCESSOR_TIMES, *PSYSTEM_PROCESSOR_TIMES;
+
+typedef long (__stdcall *QuerySystemInformationProc)
+    (SYSTEM_INFORMATION_CLASS, PVOID, ULONG, PULONG);
+
+static struct {
+    HMODULE hmod;
+    QuerySystemInformationProc QuerySystemInformation;
+    ULONG nprocs;
+} glob;
+
+static void init (void)
+{
+    if (!glob.hmod) {
+        glob.hmod = LoadLibrary ("ntdll.dll");
+        if (!glob.hmod) {
+            failwith_fmt ("could not load ntdll.dll: %#lx", GetLastError ());
+        }
+
+        *(void **) &glob.QuerySystemInformation =
+            GetProcAddress (glob.hmod, "ZwQuerySystemInformation");
+        if (!glob.QuerySystemInformation) {
+            failwith_fmt (
+                "could not obtain ZwQuerySystemInformation entry point: %#lx\n",
+                GetLastError ());
+        }
+    }
+}
+
+static void qsi (int c, PVOID buf, ULONG size)
+{
+    ULONG retsize = 0;
+    long status;
+
+    init ();
+    status = glob.QuerySystemInformation (c, buf, size, &retsize);
+    if (status < 0) {
+        failwith_fmt ("could not query system information %d\n", c);
+    }
+    if (retsize != size) {
+        fprintf (stderr, "class=%d status=%ld size=%d retsize=%d\n",
+                 c, status, size, retsize);
+    }
+#ifdef DEBUG
+    printf ("class=%d status=%ld size=%d retsize=%d\n",
+            c, status, size, retsize);
+#endif
+}
+
+CAMLprim value ml_waitalrm (value unit_v)
+{
+    CAMLparam1 (unit_v);
+
+    failwith ("waitalrm not supported on Windows");
+    CAMLreturn (Val_unit);
+}
+
+static void get_nprocs (void)
+{
+    SYSTEM_BASIC_INFORMATION sbi;
+
+    qsi (0, &sbi, sizeof (sbi));
+    glob.nprocs = sbi.NumberProcessors;
+}
+
+CAMLprim value ml_sysinfo (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLlocal2 (res_v, loads_v);
+
+    get_nprocs ();
+
+    loads_v = caml_alloc_tuple (3);
+    Store_field (loads_v, 0, caml_copy_int64 (0));
+    Store_field (loads_v, 1, caml_copy_int64 (0));
+    Store_field (loads_v, 2, caml_copy_int64 (0));
+
+    res_v = caml_alloc_tuple (9);
+    Store_field (res_v, 0, 0);
+    Store_field (res_v, 1, loads_v);
+    Store_field (res_v, 2, 0);
+    Store_field (res_v, 3, 0);
+    Store_field (res_v, 4, 0);
+    Store_field (res_v, 5, 0);
+    Store_field (res_v, 6, 0);
+    Store_field (res_v, 7, 0);
+    Store_field (res_v, 8, glob.nprocs);
+
+    CAMLreturn (res_v);
+}
+
+CAMLprim value ml_get_nprocs (value unit_v)
+{
+    CAMLparam1 (unit_v);
+
+    get_nprocs ();
+    CAMLreturn (Val_int (glob.nprocs));
+}
+
+CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
+{
+    CAMLparam2 (fd_v, nprocs_v);
+    CAMLlocal1 (res_v);
+    int nprocs = Int_val (nprocs_v);
+    PSYSTEM_PROCESSOR_TIMES buf;
+    size_t n = nprocs * sizeof (*buf);
+    int i;
+
+    buf = _alloca (n);
+    if (!buf) {
+        failwith_fmt ("alloca: %s", strerror (errno));
+    }
+
+    qsi (8, buf, n);
+
+    res_v = caml_alloc (nprocs * Double_wosize, Double_array_tag);
+    for (i = 0; i < nprocs; ++i) {
+        double d = buf[i].IdleTime.QuadPart * 1e-7;
+
+        Store_double_field (res_v, i, d);
+    }
+    CAMLreturn (res_v);
+}
+
+CAMLprim value ml_get_hz (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    CAMLreturn (Val_int (100));
+}
+
+CAMLprim value ml_nice (value nice_v)
+{
+    CAMLparam1 (nice_v);
+    int niceval = Int_val (nice_v);
+
+    failwith_fmt ("nice: not implemented on Windows");
+    CAMLreturn (Val_unit);
+}
+
+CAMLprim value ml_seticon (value data_v)
+{
+    CAMLparam1 (data_v);
+    CAMLreturn (Val_unit);
+}
+
+CAMLprim value ml_delay (value secs_v)
+{
+    CAMLparam1 (secs_v);
+    DWORD millis = (DWORD) (Double_val (secs_v) * 1e4);
+
+    caml_enter_blocking_section ();
+    {
+        Sleep (millis);
+    }
+    caml_leave_blocking_section ();
+    CAMLreturn (Val_unit);
+}
+
+CAMLprim value ml_is_winnt (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    OSVERSIONINFO ovi;
+
+    ovi.dwOSVersionInfoSize = sizeof (ovi);
+    if (!GetVersionEx (&ovi)) {
+        failwith_fmt ("Could not get version information: %#lx",
+                      GetLastError ());
+    }
+
+    if (ovi.dwPlatformId != VER_PLATFORM_WIN32_NT) {
+        caml_failwith ("Only NT family of Windows is supported by APC");
+    }
+
+    CAMLreturn (Val_true);
+}
+
+#else
+#error This operating system is not supported
+#endif

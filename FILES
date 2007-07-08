@@ -5,6 +5,7 @@ mod/OMakefile
 mod/itc-mod.c
 ml_apc.c
 build.sh
+build.bat
 README
 Thanks
 FILES
