@@ -11,7 +11,7 @@
 
 #define HIST 10
 
-static sig_atomic_t stop;
+static volatile sig_atomic_t stop;
 
 static void sighandler (int signr)
 {
@@ -49,6 +49,7 @@ int main (void)
         err (EXIT_FAILURE, "failed to set interval timer");
     }
 
+    hog (ULONG_MAX);
     for (i = 0; i < HIST; ++i) {
         v[i] = ULONG_MAX - hog (ULONG_MAX);
     }

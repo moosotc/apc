@@ -1,154 +1,4 @@
-OMakeFlags(-w)
-
-if $(not $(defined TARGET_OS))
-    if $(equal $(OSTYPE), Win32)
-        TARGET_OS = win
-        export
-    else
-        TARGET_OS = nix
-        export
-    export
-#TARGET_OS       = win
-#TARGET_OS       = nix
-
-imt             = imt #$(file build/common/bin/imt)
-cc              = gcc
-cxx             = g++
-ocamlc-cflags   = -warn-error A -g
-ocamlopt-cflags = -warn-error A
-ocamlc-lflags   =
-ocamlopt-lflags =
-target-flags    =
-ocamlc          = ocamlc.opt
-ocamlopt        = ocamlopt.opt
-ocamldep        = ocamldep
-host-win32      = $(equal $(OSTYPE), Win32)
-target-win32    = $(equal $(TARGET_OS), win)
-cross-win32     = $(and $(target-win32), $(not $(host-win32)))
-target-mingw    = $(defined mingw)
-mingw           = $(EMPTY)
-darwin          = $(equal $(SYSNAME), Darwin)
-
-if $(defined top-dir)
-    ls -lR $(top-dir) >/dev/null
-
-if $(target-win32)
-    if $(target-mingw)
-        mingw = $(if $(cross-win32), mingwf, $(EMPTY))
-        wine = $(if $(cross-win32), wine, $(EMPTY))
-#        if $(cross-win32)
-#            wineserver -p
-        exe = .exe
-        obj = .o
-        dllname(name) =
-            return $(name).dll
-        libname(name) =
-            return lib$(name).a
-        exename(name) =
-            return $(name).exe
-        ocamlc = $(wine) ocamlc.opt.exe
-        ocamlopt = $(wine) ocamlopt.opt.exe
-        if $(not $(cross-win32))
-            ocamldep = ocamldep.exe
-            export
-        cc = $(mingw) gcc
-        cxx = $(mingw) g++
-        c-cflags = -Wall -Werror -g
-        cxx-cflags = -Wall -Werror -g
-        TARGET_OS = mingw
-        export
-    else
-        dxsdk = $(getenv DXSDK_DIR, $(EMPTY))
-        if $(not $(equal $(dxsdk), $(EMPTY)))
-            setenv (INCLUDE, $(getenv INCLUDE)$";$(dxsdk)\include")
-            setenv (LIB, $(getenv LIB)$";$(dxsdk)\lib\x86")
-            export
-        wine = $(if $(cross-win32), wine, $(EMPTY))
-        if $(cross-win32)
-            wineserver -p
-        exe = .exe
-        obj = .obj
-        dllname(name) =
-            return $(name).dll
-        libname(name) =
-            return $(name).lib
-        exename(name) =
-            return $(name).exe
-        ocamlc = $(wine) ocamlc.opt.exe
-        ocamlopt = $(wine) ocamlopt.opt.exe
-        if $(not $(cross-win32))
-            ocamldep = ocamldep.exe
-            export
-        c-cflags = -WX -W4 -Zi -MT
-        cxx-cflags = -WX -W4 -Zi -MT
-        export
-    export
-else
-    obj = .o
-    exe =
-    switch $(SYSNAME)
-    case Darwin
-        dllname(name) =
-            return lib$(name).a
-        export dllname
-    default
-        dllname(name) =
-            return lib$(name).so
-        export dllname
-    libname(name) =
-        return lib$(name).a
-    exename(name) =
-        return $(name)
-    c-cflags = -Wall -Werror -W -fstrict-aliasing -g -Wno-long-long -pipe
-    cxx-cflags = -Wall -Werror -W -fstrict-aliasing -g -Wno-long-long -pipe
-    c-cflags += -pedantic
-    cxx-cflags = -pedantic
-    export
-
-match $(MACHINE)
-case $"i[3456]86"
-    c-cflags += -DX86_ASSEMBLER
-    x86 = true
-    export
-case $"Power.*"
-    c-cflags += -DWORDS_BIGENDIAN
-    x86 = false
-    export
-case $"ppc"
-    c-cflags += -DWORDS_BIGENDIAN
-    x86 = false
-    export
-default
-    eprintln (Machine "$(MACHINE)" is not recognized)
-    x86 = false
-#    exit (1)
-
-emit-stdmake-rule(name) =
-    if $(defined make-file)
-        t = $(target $(name))
-        deps = $(fullname $(filter-targets $(filter-out %.scan, $(t.build-deps))))
-        stdout = $(make-file)
-        echo $(fullname $(t.target))\: $(deps)
-        d = $(fullname $(dirof $(t.target)))
-        # mucho importante - first char after quotation mark is tab
-        echo "	mkdir -p $d && cd $d && $(t.build-commands)"
-    return
-
-caml-emit-stdmake-rule(name) =
-    emit-stdmake-rule($(name))
-
-c-emit-stdmake-rule(name) =
-    emit-stdmake-rule($(name))
-
-cxx-emit-stdmake-rule(name) =
-    emit-stdmake-rule($(name))
-
-emit-stdmake-line(line) =
-    if $(defined make-file)
-        fprintln($(make-file), $(line))
-
-emit-stdmake-dep(target, prereq) =
-    emit-stdmake-line($(target)\: $(fullname $(prereq)))
+OMakeFlags (-w)
 
 .ORDER: .caml-order
 .caml-order: %.cmi: %.cmo
@@ -182,16 +32,6 @@ collect-includes(flags) =
         export
     return $(dirs)
 
-cpp-digest-deps(flags) =
-    includes = $(collect-includes $(flags))
-    return $(digest-in-path-optional $(includes) ., $&)
-
-c-digest-deps() =
-    return cpp-digest-deps($(c-cflags) $(target-flags))
-
-cxx-digest-deps() =
-    return cpp-digest-deps($(cxx-cflags) $(target-flags))
-
 Shell. +=
     pr-list(argv) =
         foreach(a, $(argv))
@@ -200,148 +40,112 @@ Shell. +=
     eecho(argv) =
         eprintln($(string $(argv)))
 
-    caml-scan(argv) =
+    cmo-scan(argv) =
         emacs-helper = directory $"`"$(absname $(dirof $<))\'
-        depflags = $(mapprefix -I, \
-                     $(collect-includes $(target-flags) $(ocamlc-cflags)))
-        eecho make[0]\: Entering $(emacs-helper)
-        depflags += $(if $(equal $(length $(filter-out %.cmx, $@)), 0),-native,$(EMPTY))
-        cd $(dirof $<) &&                                   \
-        $(ocamldep) $(depflags) $(basename $<) && \
-        eecho make[0]\: Leaving $(emacs-helper) #|| exit 10
+        eecho "make[0]: Entering $(emacs-helper)"
+        cd $(dirof $<)
+        ocamldep $(depflags) $(basename $<)
+        eecho "make[0]: Leaving $(emacs-helper)"
 
-.SCANNER: %.o.scan: %.c
-    $(cc) -MT $* -M $(target-flags) $(c-cflags) $<
+    cmx-scan(argv) =
+        emacs-helper = directory $"`"$(absname $(dirof $<))\'
+        eecho "make[0]: Entering $(emacs-helper)"
+        cd $(dirof $<)
+        ocamldep $(depflags) $(basename $<)
+        eecho "make[0]: Leaving $(emacs-helper)"
 
-.SCANNER: %.o.scan: %.cpp
-    $(cxx) -MT $* -M $(target-flags) $(cxx-cflags) $<
+ocamlc(name, flags) =
+    s = $(name).ml
+    i = $(name).mli
+    o = $(name).cmo
+    I = $(name).cmi
 
-%.o: %.c :scanner: %.o.scan \
-    :value: $(c-digest-deps) :value: $(c-emit-stdmake-rule $@)
-    $(cc) -c $(target-flags) $(c-cflags) $<
+    depflags = $(mapprefix -I, $(collect-includes $(flags)))
 
-%.o: %.cpp :scanner: %.o.scan \
-    :value: $(cxx-digest-deps) :value: $(cxx-emit-stdmake-rule $@)
-    $(cxx) -c $(target-flags) $(cxx-cflags) $<
+    .SCANNER: %.cmo.scan: %.ml
+        cmo-scan
 
-.SCANNER: %.obj.scan: %.c
-    imt dep7 $* $(target-flags) $(c-cflags) $<
+    if $(file-exists $i)
+        .SCANNER: %.cmi.scan: %.mli
+            cmo-scan
 
-.SCANNER: %.obj.scan: %.cpp
-    imt dep7 $* $(target-flags) $(cxx-cflags) $<
+        $o: $I
+        $I: $i :scanner: $I.scan
+            ocamlc $(flags) -c -o $I $(absname $i)
 
-%.obj: %.c :scanner: %.obj.scan \
-    :value: $(c-digest-deps) :value: $(c-emit-stdmake-rule $@)
-    imt cl -c $(target-flags) $(c-cflags) $<
-
-%.obj: %.cpp :scanner: %.obj.scan \
-    :value: $(cxx-digest-deps) :value: $(cxx-emit-stdmake-rule $@)
-    imt cl -c $(target-flags) $(cxx-cflags) $<
-
-.SCANNER: %.cmo.scan: %.ml
-    caml-scan
-
-.SCANNER: %.cmx.scan: %.ml
-    caml-scan
-
-.SCANNER: %.cmi.scan: %.mli
-    caml-scan
-
-%.cmi %.cmi-o: %.mli :scanner: %.cmi.scan
-    $(ocamlc) -o $*.cmi -c $(target-flags) $(ocamlc-cflags) $< && touch $*.cmi-o
-
-%.cmi %.cmi-x: %.mli :scanner: %.cmi.scan
-    $(ocamlopt) -o $*.cmi -c $(target-flags) $(ocamlopt-cflags) $< \
-        && touch $*.cmi-x
-
-%.cmo: %.ml
-    section rule
-        if $(target-exists %.mli)
-            %.cmo: %.ml %.cmi-o %.cmi :value: $(caml-emit-stdmake-rule $@) \
-                :scanner: %.cmo.scan
-                $(ocamlc) -o $@ -c $(target-flags) $(ocamlc-cflags) $<
-        else
-            %.cmo: %.ml :scanner: %.cmo.scan :effects: %.cmi \
-                :value: $(caml-emit-stdmake-rule $@)
-                $(ocamlc) -o $@ -c $(target-flags) $(ocamlc-cflags) $<
-
-if $(target-win32)
-    %.obj %.cmx: %.ml
-        section rule
-            if $(target-exists %.mli)
-                %.obj %.cmx: %.ml %.cmi-x %.cmi \
-                    :value: $(caml-emit-stdmake-rule $@)
-                    $(ocamlopt) -o $*.cmx -c $(target-flags) \
-                        $(ocamlopt-cflags) $<
-            else
-                %.obj %.cmx: %.ml :scanner: %.cmx.scan :effects: %.cmi \
-                    :value: $(caml-emit-stdmake-rule $@)
-                    $(ocamlopt) -o $*.cmx -c $(target-flags) \
-                        $(ocamlopt-cflags) $<
-    export
-else
-    %.o %.cmx: %.ml
-        section rule
-            if $(target-exists %.mli)
-                %.o %.cmx: %.ml %.cmi-x %.cmi \
-                    :value: $(caml-emit-stdmake-rule $@)
-                    $(ocamlopt) -o $*.cmx -c $(target-flags) \
-                        $(ocamlopt-cflags) $<
-            else
-                %.o %.cmx: %.ml :scanner: %.cmx.scan :effects: %.cmi \
-                    :value: $(caml-emit-stdmake-rule $@)
-                    $(ocamlopt) -o $*.cmx -c $(target-flags) \
-                        $(ocamlopt-cflags) $<
-    export
-
-profile =
-    if $(defined profile)
-        value $(profile)
+        $o: $s :scanner: $o.scan
+            ocamlc $(flags) -c -o $o $(absname $s)
     else
-        value debug
+        $o $I: $s :scanner: $o.scan
+            ocamlc $(flags) -c -o $o $(absname $s)
 
-switch $(profile)
-case release
-    profile-c-cflags[] = -O2 -DNDEBUG
-    profile-cxx-cflags[] = -O2 -DNDEBUG
-    export
-case debug
-    profile-c-cflags[] = -DDEBUG
-    profile-cxx-cflags[] = -DDEBUG
-    export
+ocamlopt(name, flags) =
+    s = $(name).ml
+    i = $(name).mli
+    o = $(name).cmx
+    I = $(name).cmi
+    O = $(name).o
 
-build-dir = build/$(TARGET_OS)/$(profile)
+    depflags = $(mapprefix -I, $(collect-includes $(flags)))
 
-subdirs[] =
+    .SCANNER: %.cmx.scan: %.ml
+        cmx-scan
 
-if $(not $(defined top-dir))
-    top-dir = $(dir .)
-    export top-dir
+    if $(file-exists $i)
+        .SCANNER: %.cmi.scan: %.mli
+            cmx-scan
 
-add-env(subdir) =
-    mkdir -p $(build-dir)/$(subdir)
-    add-project-directories($(subdir))
+#        $o: $I
+#        $I: $i :scanner: $I.scan
+#            ocamlopt $(flags) -c -o $I $(absname $i)
 
-add-env2(subdir) =
-    mkdir -p $(subdir)
-    add-project-directories($(top-dir)/$(subdir))
+        $o $O: $s :scanner: $o.scan
+            ocamlopt $(flags) -c -o $o $(absname $s)
+    else
+        $o $O: $s :scanner: $o.scan
+            ocamlopt $(flags) -c -o $o $(absname $s)
 
-create-env(subdirs) =
-    subdirs += .
-    foreach(subdir, $(subdirs))
-        mkdir -p $(build-dir)/$(subdir)
-    add-project-directories($(subdirs))
+Mocamlc(names, flags) =
+    foreach (n, $(names))
+        ocamlc ($n, $(flags))
 
-create-env($(subdirs))
+Mocamlopt(names, flags) =
+    foreach (n, $(names))
+        ocamlopt ($n, $(flags))
 
-#make-file = $(fopen $(build-dir)/Makefile, w)
+cc(name, flags) =
+    s = $(name).c
+    o = $(name).o
 
-vmount($(top-dir), $(build-dir))
-bin-path = $(dir $(build-dir)/bin)
+    .SCANNER: %.o.scan: %.c
+        gcc $(flags) -MM -MT $* $<
 
-mkdir -p $(build-dir)
-mkdir -p $(bin-path)
+    $o: $s :scanner: $o.scan
+        gcc $(flags) -c -o $@ $<
 
-.PHONY: all clean
-.DEFAULT: all
-.SUBDIRS: $(build-dir)
+ocamlcc(name, flags) =
+    s = $(name).c
+    o = $(name).o
+
+    .SCANNER: %.o.scan: %.c
+        ocamlc -ccopt "$(flags) -MM -MT $o" -cc gcc $<
+
+    $o: $s :scanner: $o.scan
+        ocamlc -ccopt "$(flags) -o $o" -cc gcc $<
+
+Mcc(names, flags) =
+    foreach (n, $(names))
+        cc($n, $(flags))
+
+Mocamlcc(names, flags) =
+    foreach (n, $(names))
+        ocamlcc($n, $(flags))
+
+if $(not $(defined srcdir))
+    srcdir = $(absname $(dirof OMakeroot))
+    export srcdir
+
+mkdir -p build
+add-project-directories (build .)
+vmount ($(srcdir), build)
+.SUBDIRS: build

@@ -1,3 +1,12 @@
+8
+ * Only allow one application to open and use the module at a time
+
+ * "Fix" module_param + idle_func
+
+ * Optional separate sys/nice/iowait/intr colors for kernel sampler
+
+ * ITC_PREEMPT_HACK is now the default for preemptible kernels
+
 7
  * Stop collecting information upon release
    Start                       upon open
@@ -43,4 +52,4 @@
  * Fixes here and there
 
 1
- * Mark `idle_func' method of geting module to load as DANGEROUS
+ * Mark `idle_func' method of getting module to load as DANGEROUS

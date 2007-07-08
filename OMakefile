@@ -1,51 +1,37 @@
-version = 0.97c
+version = 0.98
 
-ocaml-includes = -I +lablGL
+.PHONY: all clean dist mod
+.DEFAULT: all
 
-ocamlc-cflags += -g $(ocaml-includes) -thread
-ocamlopt-cflags += $(ocaml-includes) -thread -compact
+Mocamlc (apc, -warn-error A -g -thread -I +lablGL)
+Mocamlcc (ml_apc, -Wall -Werror -g)
+Mocamlopt (apc, -warn-error A -thread -I +lablGL)
 
-ocamlc-lflags += -g $(ocaml-includes) -thread
-ocamlopt-lflags += $(ocaml-includes) -thread
+objs = ml_apc.o
+libs = unix lablgl lablglut threads
 
-ocaml-libs = unix lablgl lablglut threads
-ocamlc-libs = $(addsuffix .cma, $(ocaml-libs))
-ocamlopt-libs = $(addsuffix .cmxa, $(ocaml-libs))
+section
+    cmos = apc.cmo
+    libs = $(addsuffix .cma, $(libs))
+    flags = -thread -custom -I +lablGL
+    apc.byte: $(cmos) $(objs)
+        ocamlc.opt $(flags) -o $@ $(libs) $(caml-sort $(cmos)) $(objs)
 
-if $(target-win32)
-    target-flags += -I.
-    %.obj: %.c :value: $(c-digest-deps) :value: $(c-emit-stdmake-rule $@)
-        $(ocamlc) -ccopt $(string -c $(target-flags) $(c-cflags)) $<
+section
+    cmxs = apc.cmx
+    libs = $(addsuffix .cmxa, $(libs))
+    flags = -thread -I +lablGL
+    apc.opt: $(cmxs) $(objs) apc.o
+        ocamlopt.opt $(flags) -o $@ $(libs) $(caml-sort $(cmxs)) $(objs)
 
-    ml_apc.obj:
-else
-    target-flags += -Wno-long-long -I.
-    .SCANNER: %.o.scan: %.c
-        $(ocamlc) -ccopt $(string $(c-cflags) \
-            -MT $* -M -MG $(target-flags)) $<
+mkdir -p mod
+add-project-directories ($(dirof OMakefile)/mod)
+vmount (-l, $(dirof OMakefile)/mod, mod)
+.SUBDIRS: mod
+    mod: itc-mod.c Makefile
+        make
 
-    %.o: %.c :scanner: %.o.scan \
-        :value: $(c-digest-deps) :value: $(c-emit-stdmake-rule $@)
-        $(ocamlc) -ccopt $(string -c $(target-flags) $(c-cflags)) $<
-
-    ml_apc.o:
-
-$(exename apc.byte): apc.cmo ml_apc$(obj)
-    $(ocamlc) -custom $(ocamlc-lflags) $(ocamlc-libs) $(target-flags) -o $@ \
-    ml_apc$(obj) apc.cmo
-#    imt link -edit -subsystem\:windows $@
-
-$(exename apc.opt): apc.cmx apc$(obj) ml_apc$(obj)
-    $(ocamlopt) $(ocamlopt-lflags) $(ocamlopt-libs) $(target-flags) -o $@ \
-    apc.cmx ml_apc$(obj)
-#    imt link /edit /subsystem\:windows $@
-
-.PHONY: byte opt dist
-
-byte: $(exename apc.byte)
-opt: $(exename apc.opt)
-
-all: byte
+all: apc.byte
 
 apc-$(version).tgz: $(shell cat FILES)
     rm -fr apc-$(version)
@@ -54,7 +40,3 @@ apc-$(version).tgz: $(shell cat FILES)
     tar cfz $@ apc-$(version)
 
 dist: apc-$(version).tgz
-
-if $(not $(target-win32))
-    add-env2 (mod)
-    .SUBDIRS: mod

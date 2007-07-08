@@ -1,5 +1,7 @@
-/* #define ITC_PREEMPT_HACK */
-/* uncomment the above if APC blatantly lies and PREEMPTION is enabled */
+#ifdef CONFIG_PREEMPT
+#define ITC_PREEMPT_HACK
+#endif
+
 #include <linux/signal.h>
 #include <linux/sched.h>
 #include <linux/interrupt.h>
@@ -64,15 +66,13 @@
 
 MODULE_DESCRIPTION ("Idle time collector");
 
-static void (*idle_func) (void);
-
 #ifdef CONFIG_X86
-/* there are many ways to prevent gcc from complaining about module_param
-   and function pointer vs long, but let's not */
+static void (*fidle_func) (void);
+static long idle_func;
 #if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 0)
 MODULE_PARM (idle_func, "l");
 #else
-module_param (idle_func, long, 0777);
+module_param (idle_func, long, 0644);
 #endif
 MODULE_PARM_DESC (idle_func, "address of default idle function");
 #endif
@@ -90,6 +90,7 @@ struct itc
   int sleeping;
 };
 
+static int in_use;
 static struct itc global_itc[NR_CPUS];
 
 /**********************************************************************
@@ -178,10 +179,12 @@ itc_idle (void)
     {
       orig_pm_idle ();
     }
+#ifdef CONFIG_X86
   else
     {
-      idle_func ();
+      fidle_func ();
     }
+#endif
 #else
   if (orig_pm_idle)
     {
@@ -189,11 +192,13 @@ itc_idle (void)
     }
   else
     {
-      if (idle_func)
+#ifdef CONFIG_X86
+      if (fidle_func)
         {
-          idle_func ();
+          fidle_func ();
         }
       else
+#endif
         {
           default_idle ();
         }
@@ -245,6 +250,7 @@ itc_release (struct inode * inode, struct file * filp)
 {
   itc_enter_bkl ();
   pm_idle = orig_pm_idle;
+  in_use = 0;
   itc_leave_bkl ();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION (2, 6, 0)
   /* XXX: 2.4 */
@@ -265,6 +271,11 @@ itc_open (struct inode * inode, struct file * filp)
       return -ENODEV;
     }
 
+  if (in_use)
+    {
+      return -EALREADY;
+    }
+
   /* old_fops = filp->f_op; */
   filp->f_op = fops_get (&itc_fops);
   fops_put (old_fops);
@@ -275,6 +286,7 @@ itc_open (struct inode * inode, struct file * filp)
       orig_pm_idle = pm_idle;
     }
   pm_idle = itc_idle;
+  in_use = 1;
   itc_leave_bkl ();
 
   return ret;
@@ -351,8 +363,16 @@ init (void)
 {
   int err;
 
+#ifdef CONFIG_X86
+  fidle_func = (void (*) (void)) idle_func;
+#endif
+
 #ifdef QUIRK
-  if (!pm_idle && !idle_func)
+  if (!pm_idle
+#ifdef CONFIG_X86
+      && !fidle_func
+#endif
+      )
     {
       printk
         (KERN_ERR
@@ -379,14 +399,20 @@ init (void)
   orig_pm_idle = pm_idle;
   printk
     (KERN_DEBUG
-     "itc: driver loaded pm_idle=%p default_idle=%p, idle_func=%p\n",
-     pm_idle,
-#ifdef QUIRK
-     NULL,
-#else
-     default_idle,
+     "itc: driver loaded pm_idle=%p default_idle=%p"
+#ifdef CONFIG_X86
+     ", idle_func=%p"
 #endif
-     idle_func
+     "\n",
+     pm_idle
+#ifdef QUIRK
+     , NULL
+#else
+     , default_idle
+#endif
+#ifdef CONFIG_X86
+     , fidle_func
+#endif
      );
   printk (KERN_DEBUG "itc: CPUs(%d present=%d online=%d)"
 #ifdef QUIRK

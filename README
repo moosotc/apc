@@ -1,10 +1,10 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-WARNING
+                               WARNING
 
 The kernel module part of this program messes with internal affairs of
 the kernel, while best effort was put into making it safe, there are:
 
-                     NO GUARANTEES WHATSOEVER
+                       NO GUARANTEES WHATSOEVER
 
 Furthermore  removing the  previous    versions  of the  module   (via
 rmmod(8))      caused  one  particular      kernel   version to  panic
@@ -23,7 +23,7 @@ of `mod/itc-mod.c'.
 refuse to build for them.
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-This is APC - graphical CPU load meter.
+               This is APC - graphical CPU load meter.
 
 It is more suitable/accurate in situations where applications generate
 "short" periodic bursts of activity.
@@ -38,12 +38,19 @@ load time is taken to mean:
 Con Kolivas  in  his post on   LKML (http://lkml.org/lkml/2007/2/12/7)
 described  the way   Linux  gathers information   that it exports   to
 `/proc/stat' (at least for "boring"  architectures), this method is by
-no means accurate.
+no means accurate and can "lie" in either direction.
 
 You can witness this  by running the `hog'  example and, if  stars are
 aligned  correctly, you will notice  that something is wrong with what
 `/proc/stat' claims. Since most of the CPU monitoring applications use
 `/proc/stat' they will produce incorrect results too.
+
+Kernel (starting with version 2.6.21) comes with a document describing
+current  the way accounting is  currently  done and problems with this
+approach (Documentation/cpu-load.txt)
+
+Following thread describes a take on addressing the issue properly:
+http://marc.info/?t=117480935100001&r=1&w=2
 
 Apart    from   being inaccurate,  `/proc/stat'  exports monotonically
 increasing load times but _NOT_  real time[1], so there's omni-present
@@ -69,6 +76,7 @@ Linux 2.6.17.6
 Linux 2.6.19.2 - AMD Athlon(tm)64 X2 Dual Core Processor  3800+
 Linux 2.6.18   - AMD Athlon(tm)64 3800+
 Linux 2.6.18.3 - PowerPC 7447A
+Linux 2.6.20.1 - PowerPC 7447A
 Linux 2.6.19   - [some Core 2 Duo]
 
 It's possible  that RMClock[3]  does something similar(load  measuring
@@ -76,7 +84,7 @@ wise) on Microsoft Windows.
 
 [1] Unlike `/proc/uptime'. But this one is useless for SMP
 [2] SMP not tested on 2.4 kernels, nor QUIRK mode. SMP on PPC wasn't
-    tested at all
+    tested either
 [3] http://cpu.rightmark.org/products/rmclock.shtml
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
