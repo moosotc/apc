@@ -203,7 +203,7 @@ end
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.98"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.98a"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -1157,7 +1157,6 @@ let seticon () =
 
 let main () =
   let _ = Glut.init [|""|] in
-  (* let () = Gl.enable `line_smooth in *)
   let () = Args.init () in
   let () =
     if !Args.verbose

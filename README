@@ -46,8 +46,8 @@ aligned  correctly, you will notice  that something is wrong with what
 `/proc/stat' they will produce incorrect results too.
 
 Kernel (starting with version 2.6.21) comes with a document describing
-current  the way accounting is  currently  done and problems with this
-approach (Documentation/cpu-load.txt)
+the  way accounting is currently  done and problems with this approach
+(Documentation/cpu-load.txt)
 
 Following thread describes a take on addressing the issue properly:
 http://marc.info/?t=117480935100001&r=1&w=2

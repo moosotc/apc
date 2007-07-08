@@ -1,4 +1,4 @@
-version = 0.98
+version = 0.98a
 
 .PHONY: all clean dist mod
 .DEFAULT: all
