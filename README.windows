@@ -4,7 +4,7 @@ Kernel accounting _IS_ inaccurate
 
 Apparently RMClock (http://cpu.rightmark.org/products/rmclock.shtml)
 either somehow sets CR4.PCE or hooks to the #GP(0) handler so that
-RDPMC works from userspace.
+RDPMC works from user-space.
 
 Therefore if RMClock is running, APC can invoked with `-M' switch and
 by sampling TSC/PMC0 one can estimate the idleness of the system.
@@ -21,3 +21,6 @@ distribution.
                     CLOCKS IN UNHALTED STATE
 Idle factor =  1 -  ------------------------
                          TOTAL CLOCKS
+
+To get rid of console (and by extension ability to read error/help
+messages) one can unREM the last line of build.bat before building.

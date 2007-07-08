@@ -1,3 +1,13 @@
+11
+ * Fix constant bar width
+
+ * Don't display things when the size of the view port is too small
+
+ * Add a piece of information to the README about another possible
+   module installation problem and a patch with a possible fix.
+   Thanks to Jonathan Derque for reporting and helping with this
+   issue
+
 10
  * Use RDPMC on NT/X86 or die trying
 
@@ -7,7 +17,7 @@
  * Reject invalid command line options
 
  * Properly flush stderr on error
- 
+
  * Solaris support
 
  * Mac OS X support
@@ -43,7 +53,7 @@
 4
  * Better working gzh mode (though still not satisfactory)
 
- * No lables/bars mode
+ * No labels/bars mode
 
  * Filled area mode
 

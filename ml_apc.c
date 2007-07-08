@@ -792,3 +792,47 @@ CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
 }
 #endif
 #endif
+
+CAMLprim value ml_fixwindow (value window_v)
+{
+    CAMLparam1 (window_v);
+    CAMLreturn (Val_unit);
+}
+
+CAMLprim value ml_testpmc (value unit_v)
+{
+    CAMLparam1 (unit_v);
+    int pmcok = 1;
+
+#ifdef _WIN32
+
+    /* Shrug */
+#if 0
+    __try {
+        _asm {
+            pushad;
+            rdpmc;
+            popad;
+        }
+    }
+    __except () {
+        pmcok = 0;
+        MessageBox (NULL,
+                    "Requested PMC based sampling is not available",
+                    "Warning",
+                    MB_OK | MB_ICONWARNING);
+    }
+#else
+    int response = MessageBox (
+        NULL,
+        "Requested PMC based sampling might cause the application to crash.\n"
+        "Continue trying to use PMC?",
+        "Warning",
+        MB_YESNO | MB_ICONWARNING);
+    pmcok = response == IDYES;
+#endif
+
+#endif
+
+    CAMLreturn (Val_bool (pmcok));
+}

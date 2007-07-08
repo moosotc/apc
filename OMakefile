@@ -1,4 +1,4 @@
-version = 1.00b
+version = 1.01
 
 .PHONY: all clean dist mod opt
 .DEFAULT: all

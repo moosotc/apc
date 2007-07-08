@@ -105,6 +105,8 @@ struct
       "ml_macosx_host_processor_info"
   external windows_processor_times : int -> float array =
       "ml_windows_processor_times"
+  external fixwindow : int -> unit = "ml_fixwindow"
+  external testpmc : unit -> bool = "ml_testpmc"
 
   let os_type = os_type ()
 
@@ -287,7 +289,7 @@ end
 module Args =
 struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 1.00b"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 1.01"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -296,7 +298,7 @@ struct
   let interval = ref 15.0
   let devpath  = NP.getselfdir () |> Filename.concat |< "itc" |> ref
   let pgrid    = ref 10
-  let sgrid    = ref 10
+  let sgrid    = ref 15
   let w        = ref 400
   let h        = ref 200
   let verbose  = ref false
@@ -317,6 +319,7 @@ struct
   let labels   = ref true
   let mgrid    = ref false
   let sepstat  = ref true
+  let grid_green = ref 0.75
 
   let pad n s =
     let l = String.length s in
@@ -448,6 +451,10 @@ struct
         if not (!isampler || !ksampler)
         then
           barw := 0
+        ;
+        if NP.winnt && !isampler
+        then
+          isampler := NP.testpmc ()
         ;
   ;;
 end
@@ -745,7 +752,10 @@ end
 module Bar (I: BarInfo) =
 struct
   let w = ref I.w
+  let dontdraw = ref false
   let h = ref I.h
+  let xoffset = ref I.x
+  let xratio = float I.x /. float !Args.w
   let wratio = float I.w /. float !Args.w
   let load = ref zero_stat
   let nrcpuscale = 1.0 /. float NP.nprocs
@@ -759,7 +769,7 @@ struct
   let seps () =
     let hh = !h - 26 in
     let () =
-      GlDraw.viewport I.x (I.y + 15) !w hh;
+      GlDraw.viewport !xoffset (I.y + 15) !w hh;
       GlMat.push ();
       GlMat.load_identity ();
       GlMat.translate ~x:~-.1.0 ~y:~-.1.0 ();
@@ -791,25 +801,33 @@ struct
   ;;
 
   let reshape w' h' =
-    w :=
-      if !Args.scalebar
-      then
-        (float w' *. wratio |> truncate)
-      else
-        !w
+    if !Args.scalebar
+    then
+      begin
+        w := float w' *. wratio |> truncate;
+        xoffset := float w' *. xratio |> truncate;
+      end
+    else
+      begin
+        w := I.w;
+        xoffset := I.x;
+      end
     ;
     h := h';
     GlList.begins sepsl `compile;
     seps ();
     GlList.ends ();
+    dontdraw :=
+      !h < 20 || !w < 20 || !xoffset < 0
+    ;
   ;;
 
-  let display () =
+  let display_aux () =
     let load = scale_stat !load nrcpuscale in
     let load_all = min (1.0 -. load.all) 1.0 |> max 0.0 in
     let () = GlMat.push () in
     let () =
-      GlDraw.viewport I.x (I.y + 2) !w !h;
+      GlDraw.viewport !xoffset (I.y + 2) !w !h;
       GlDraw.color (1.0, 1.0, 1.0);
       let load_all = 100.0 *. load_all in
       let str = sprintf "%5.2f" load_all in
@@ -828,7 +846,7 @@ struct
       let () = draw_string 0.0 0.0 str in
         ()
     in
-      GlDraw.viewport I.x (I.y + 15) !w (!h - 26);
+      GlDraw.viewport !xoffset (I.y + 15) !w (!h - 26);
       GlMat.load_identity ();
       GlMat.translate ~x:~-.1. ~y:~-.1.();
       let drawquad yb yt =
@@ -858,6 +876,15 @@ struct
         GlList.call sepsl;
   ;;
 
+  let display () =
+    if !dontdraw
+    then
+      ()
+    else
+      display_aux ()
+    ;
+  ;;
+
   let update delta' load' =
     let delta = 1.0 /. delta' in
       load := scale_stat load' delta;
@@ -878,6 +905,7 @@ struct
   let scale = V.freq /. V.interval
   let gscale = 1.0 /. float V.sgrid
   let nsamples = ref 0
+  let dontdraw = ref false
 
   let fw, fh =
     if !Args.labels
@@ -890,14 +918,17 @@ struct
   let gridlist =
     let base = GlList.gen_lists ~len:1 in
       GlList.nth base ~pos:0
+  ;;
 
-  let viewport typ =
+  let getviewport typ =
     let ox = if !Args.scalebar then 0 else !Args.barw in
-    let x, y, w, h =
       match typ with
         | `labels -> (!vx + ox, !vy + 5, fw, !vh - fh)
         | `graph  -> (!vx + fw + 5 + ox, !vy + 5, !vw - fw - 10, !vh - fh)
-    in
+  ;;
+
+  let viewport typ =
+    let x, y, w, h = getviewport typ in
       GlDraw.viewport x y w h;
   ;;
 
@@ -913,7 +944,7 @@ struct
   let grid () =
     viewport `graph;
     GlDraw.line_width 1.0;
-    GlDraw.color (0.0, 1.0, 0.0);
+    GlDraw.color (0.0, !Args.grid_green, 0.0);
     GlDraw.begins `lines;
     if !Args.mgrid
     then
@@ -947,7 +978,7 @@ struct
             do
               let p = i * V.pgrid in
               let y = float p /. ohp in
-              let s = Printf.sprintf "%3d%%" p in
+              let s = sprintf "%3d%%" p in
                 draw_string 1.0 y s
             done
         end
@@ -960,9 +991,21 @@ struct
       vh := hxsh |> truncate;
       vx := wxsw *. sx |> truncate;
       vy := hxsh *. sy |> truncate;
-      GlList.begins gridlist `compile;
-      grid ();
-      GlList.ends ();
+      dontdraw :=
+        (
+          let x0, y0, w0, h0 = getviewport `labels in
+          let x1, y1, w1, h1 = getviewport `graph in
+            w0 < 20 || h0 < 20 || x0 < 0 || y0 < 0 ||
+            w1 < 20 || h1 < 20 || x1 < 0 || y1 < 0
+        )
+      ;
+      if not !dontdraw
+      then
+        begin
+          GlList.begins gridlist `compile;
+          grid ();
+          GlList.ends ();
+        end
   ;;
 
   let swap =
@@ -973,7 +1016,7 @@ struct
 
   let mgrid () =
     GlDraw.line_width 1.0;
-    GlDraw.color (0.0, 1.0, 0.0);
+    GlDraw.color (0.0, !Args.grid_green, 0.0);
     GlDraw.begins `lines;
     let offset =
       ((pred !nsamples |> float) *. scale /. gscale |> modf |> fst) *. gscale
@@ -987,7 +1030,7 @@ struct
       GlDraw.ends ();
   ;;
 
-  let display () =
+  let display_aux () =
     GlList.call gridlist;
     viewport `graph;
     if !Args.mgrid then mgrid ();
@@ -1024,6 +1067,15 @@ struct
         GlDraw.ends ();
     in
       List.iter sample V.samplers;
+  ;;
+
+  let display () =
+    if not !dontdraw
+    then
+      display_aux ()
+    else
+      ()
+    ;
   ;;
 
   let funcs = display, reshape, inc
@@ -1399,7 +1451,8 @@ let main () =
   and h = !Args.h in
   let fd = opendev !Args.devpath in
   let module FullV = View (struct let w = w let h = h end) in
-  let _winid = FullV.init () in
+  let winid = FullV.init () in
+  let () = NP.fixwindow winid in
   let (kget, kfuncs), (iget, ifuncs), gl = create fd w h in
   let bar_update =
     List.iter FullV.add gl;

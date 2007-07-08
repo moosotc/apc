@@ -120,7 +120,7 @@ Following applies only to Linux running on X86.
 
 If the module fails to load consult dmesg(8). Most likely cause is the
 lack of exported `default_idle'  function. Few workarounds follow.  If
-the  dmesg reads "itc: Unknown symbol  default_idle" you might want to
+dmesg(8) reports "itc: Unknown symbol  default_idle" you might want to
 try patching the module sources:
 
 $ (cd mod && patch -p0 <itc.patch && make)
