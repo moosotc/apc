@@ -8,6 +8,7 @@
 #include <caml/mlvalues.h>
 #include <caml/bigarray.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -124,8 +125,9 @@ CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
 
     res_v = caml_alloc (nprocs * Double_wosize, Double_array_tag);
     for (i = 0; i < nprocs; ++i) {
-        double d = buf[i].tv_sec + buf[i].tv_usec * 1e-6;
+        double d;
 
+        d = buf[i].tv_sec + buf[i].tv_usec * 1e-6;
         Store_double_field (res_v, i, d);
     }
     CAMLreturn (res_v);
@@ -196,6 +198,9 @@ CAMLprim value ml_seticon (value data_v)
 #endif
             }
         }
+    }
+    else {
+        CAMLreturn (Val_unit);
     }
 
     p[0] = 32;

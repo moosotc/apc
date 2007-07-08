@@ -70,7 +70,9 @@ module NP = struct
       try String.index_from s pos ' '
       with Not_found -> slen
     in
-    let i = endpos - pos |> String.sub s pos |> int_of_string in
+    let i = endpos - pos |> String.sub s pos
+                         |> int_of_string
+                         |> jiffies_to_sec in
       if endpos = slen
       then
         `last i
@@ -88,7 +90,7 @@ module NP = struct
     let vals = List.rev |<
         if List.length vals < 7
         then
-          0 :: 0 :: 0 :: 0 :: vals
+          0.0 :: 0.0 :: 0.0 :: 0.0 :: vals
         else
           vals
     in
@@ -102,14 +104,13 @@ module NP = struct
         let rec convert accu total n =
           if n = nprocs
           then
-            let t = total *. hz |> truncate in
+            let t = total in
             let a = "cpu", Array.make 7 t in
               a :: List.rev accu
           else
             let i = Array.get ia n in
             let total = total +. i in
-            let t = i *. hz |> truncate in
-            let v = "cpu" ^ string_of_int n, Array.make 7 t in
+            let v = "cpu" ^ string_of_int n, Array.make 7 i in
               convert |< v :: accu |< total |< succ n
         in
           convert [] 0.0 0
@@ -134,7 +135,7 @@ end
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.95"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.97"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -175,10 +176,11 @@ module Args = struct
             ~dst_pos:0;
           d
 
+  let sooo b = if b then "on" else "off"
   let dA tos s {contents=v} = s ^ " (" ^ tos v ^ ")"
   let dF = dA |< sprintf "%4.2f"
-  let dB = dA string_of_bool
-  let dcB = dA (fun b -> not b |> string_of_bool)
+  let dB = dA sooo
+  let dcB = dA sooo
   let dI = dA string_of_int
   let dS = dA (fun s -> "`" ^ String.escaped s ^ "'")
 
@@ -191,19 +193,23 @@ module Args = struct
   let sB opt r doc =
     "-" ^ opt, Arg.Set r, pad 9 "" ^ doc |> dB |< r
 
-  let cB opt r doc =
-    "-" ^ opt, Arg.Clear r, pad 9 "" ^ doc |> dcB |< r
-
   let sS opt r doc =
     "-" ^ opt, Arg.Set_string r, pad 9 "<string> " ^ doc |> dS |< r
+
+  let fB opt r doc =
+    if r.contents
+    then
+      "-" ^ opt, Arg.Clear r, pad 9 "" ^ doc |> dB |< r
+    else
+      "-" ^ opt, Arg.Clear r, pad 9 "" ^ doc |> dcB |< r
 
   let init () =
     let opts =
       [ sF "f" freq "sampling frequency in seconds"
       ; sF "D" delay "refresh delay in seconds"
       ; sF "i" interval "history interval in seconds"
-      ; sI "p" pgrid "percent grid"
-      ; sI "s" sgrid "history grid"
+      ; sI "p" pgrid "percent grid items"
+      ; sI "s" sgrid "history grid items"
       ; sI "w" w "width"
       ; sI "h" h "height"
       ; sI "b" barw "bar width"
@@ -211,18 +217,18 @@ module Args = struct
       ; sI "n" niceval "value to renice self on init"
       ; sI "t" timer "timer frequency in herz"
       ; sS "d" devpath "path to itc device"
-      ; cB "k" ksampler |< "do not use kernel sampler"
+      ; fB "k" ksampler |< "kernel sampler"
         ^ (if NP.winnt then "" else " (`/proc/[stat|uptime]')")
-      ; sB "g" gzh "gzh way (does not quite work yet)"
-      ; sB "u" uptime
-        "use `uptime' instead of `stat' as kernel sampler (UP only)"
+      ; fB "g" gzh "gzh way (does not quite work yet)"
+      ; fB "u" uptime
+        "`uptime' instead of `stat' as kernel sampler (UP only)"
       ; sB "v" verbose "verbose"
-      ; sB "S" sigway "sigwait delay method"
-      ; sB "c" scalebar "constant bar width"
-      ; sB "P" poly "use filled area instead of lines"
-      ; sB "I" icon "use icon (hack)"
-      ; cB "l" labels "do not draw labels"
-      ; sB "m" mgrid "moving grid"
+      ; fB "S" sigway "sigwait delay method"
+      ; fB "c" scalebar "constant bar width"
+      ; fB "P" poly "filled area instead of lines"
+      ; fB "I" icon "icon (hack)"
+      ; fB "l" labels "labels"
+      ; fB "m" mgrid "moving grid"
       ]
     in
     let opts =
@@ -884,8 +890,8 @@ let create fd w h =
             let i1 = g ks |> ref in
               fun ks t1 t2 ->
                 let i2 = g ks in
-                let i1' = NP.jiffies_to_sec !i1
-                and i2' = NP.jiffies_to_sec i2 in
+                let i1' = !i1
+                and i2' = i2 in
                   i1 := i2;
                   (i1', i2')
       in
@@ -912,9 +918,13 @@ let create fd w h =
       let i1 = Array.get is i |> ref in
         fun is t1 t2 ->
           let i2 = Array.get is i in
-          let i1' = !i1 in
-            i1 := i2;
-            (i1', i2)
+            if classify_float i2 = FP_infinite
+            then
+              (t1, t2)
+            else
+              let i1' = !i1 in
+                i1 := i2;
+                (i1', i2)
     in
     let kaccu =
       if !Args.ksampler
@@ -1004,6 +1014,11 @@ let seticon () =
 let main () =
   let _ = Glut.init [|""|] in
   let () = Args.init () in
+  let () =
+    if !Args.verbose
+    then
+      "detected " ^ string_of_int NP.nprocs ^ " CPUs" |> print_endline
+  in
   let () = if !Args.gzh then Gzh.init !Args.verbose in
   let () = Delay.init !Args.timer !Args.gzh in
   let () = if !Args.niceval != 0 then NP.setnice !Args.niceval in

@@ -1,4 +1,27 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+WARNING
+
+The kernel module part of this program messes with internal affairs of
+the kernel, while best effort was put into making it safe, there are:
+               NO GUARANTEES WHATSOEVER
+
+Furthermore  removing the  previous   versions   of the module    (via
+rmmod(8))    caused     one  particular   kernel    version  to  panic
+(2.6.8-2-686-SMP form Debian), to  the  best  of my  current  knowledge
+panics are only possible on SMP machines (and with maxcpus > 1).  Pair
+of safety nets were added and this  particular kernel no longer panics
+upon module removal, but, again, three words in caps above apply.
+
+The module expects certain things not to happen at particular point in
+execution, otherwise the information kernel  module exports can not be
+trusted.   Those `things' did  happen on aforementioned Debian kernel,
+so if you need to run APC there you might want to uncomment first line
+of `mod/itc-mod.c'.
+
+2.4 series of kernels were never tested on SMP as such the module will
+refuse to build for them.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 This is APC - graphical CPU load meter.
 
 It is more suitable/accurate in situations where applications generate
@@ -19,12 +42,12 @@ you will  see  in top(1)  (or anything  `/proc/stat' based) would  not
 represent reality  accurately. Ditto for plain  video clips playing at
 25 fps.
 
-When   frequency of aforementioned    bursts  devides HZ value  evenly
+When   frequency of aforementioned    bursts  divides HZ value  evenly
 reading `/proc/stat'  or `/proc/uptime'  can  make an  impression that
 sometimes machine gets loaded for a brief period of time but then goes
 idle again (for a while) then the cycle repeats. This is not the case,
 the machine  is constantly loaded (well  according to ad-hoc measuring
-via background niced process and/or APC)
+via background "niced" process and/or APC)
 
 If this line of thinking is correct one can not notice any load at all
 while watching  NTSC  content  (30fps - does not  divide  100/250/1000
@@ -47,9 +70,11 @@ tunable parameters.
 Tested on[2]:
 
 Linux 2.4.30   - AMD Athlon(tm) Processor (1.4 Ghz)
-Linux 2.6.17.6 - AMD Athlon(tm)64 X2 Dual Core Processor  3800+
+Linux 2.6.17.6
+Linux 2.6.19.2 - AMD Athlon(tm)64 X2 Dual Core Processor  3800+
 Linux 2.6.18   - AMD Athlon(tm)64 3800+
 Linux 2.6.18.3 - PowerPC 7447A
+Linux 2.6.19   - [some Core 2 Duo]
 
 It's possible  that RMClock[3]  does something similar(load  measuring
 wise) on Microsoft Windows.
@@ -75,10 +100,18 @@ Process:
 
 <untar and go to directory with sources>
 $ sh build.sh
-$ cd mod
-$ su -c 'insmod ./its.ko' - 2.6 Kernels
-$ su -c 'insmod ./its.o'  - 2.4 Kernels
 
+# if following fails on X86 read bellow
+$ su -c 'insmod mod/its.ko' - 2.6 Kernels
+$ su -c 'insmod mod/its.o'  - 2.4 Kernels
+
+$ major=$(awk '/ itc$/ {print $1}' /proc/devices)
+$ su -c "mknod -m 0444 itc c $major 0"
+
+[make sure you are in X]
+$ ./apc
+
+``````````````````````````````````````````````````````````````````````
 Following applies only to Linux running on X86.
 
 If the module fails to load consult dmesg(8). Most likely cause is the
@@ -93,17 +126,11 @@ Variant 2 (DANGEROUS)
     ------------------------------------------------------------------
     Kernel 2.6
     $ func=$(awk '/default_idle$/ {print "0x" $1}' /proc/kallsyms)
-    $ su -c "insmod ./itc.ko idle_func=$func"
+    $ su -c "/sbin/insmod ./itc.ko idle_func=$func"
 
     ------------------------------------------------------------------
     Kernel 2.4
     $ func=$(awk '/default_idle$/ {print "0x" $1}' /proc/ksyms)
-    $ su -c "insmod ./itc.o idle_func=$func"
+    $ su -c "/sbin/insmod ./itc.o idle_func=$func"
 
 ======================================================================
-$ cd ..
-$ major=$(awk '/ itc$/ {print $1}' /proc/devices)
-$ su -c "mknod -m 0444 itc c $major 0"
-
-[make sure you are in X]
-$ ./apc

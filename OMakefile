@@ -1,4 +1,4 @@
-version = 0.96
+version = 0.97
 
 ocaml-includes = -I +lablGL
 
@@ -15,18 +15,18 @@ ocamlopt-libs = $(addsuffix .cmxa, $(ocaml-libs))
 if $(target-win32)
     target-flags += -I.
     %.obj: %.c :value: $(c-digest-deps) :value: $(c-emit-stdmake-rule $@)
-        $(ocamlc) -ccopt $(quote -c $(target-flags) $(c-cflags)) $<
+        $(ocamlc) -ccopt $(string -c $(target-flags) $(c-cflags)) $<
 
     ml_apc.obj:
 else
     target-flags += -Wno-long-long -I.
     .SCANNER: %.o.scan: %.c
-        $(ocamlc) -ccopt $(quote $(c-cflags) \
+        $(ocamlc) -ccopt $(string $(c-cflags) \
             -MT $* -M -MG $(target-flags)) $<
 
     %.o: %.c :scanner: %.o.scan \
         :value: $(c-digest-deps) :value: $(c-emit-stdmake-rule $@)
-        $(ocamlc) -ccopt $(quote -c $(target-flags) $(c-cflags)) $<
+        $(ocamlc) -ccopt $(string -c $(target-flags) $(c-cflags)) $<
 
     ml_apc.o:
 

@@ -1,3 +1,16 @@
+7
+ * Stop collecting information upon release
+   Start                       upon open
+
+ * Set itc->sleeping when entering `itc_idle'
+
+ * Refuse to build on 2.4 + SMP
+
+ * Fix some command line options behavior/documentation
+
+ * Add (manually selectable) hack to work around issues
+   with 2.6.8-2-686-smp kernel (from Debian)
+
 6
  * Linux/PPC(6xx) support
 
