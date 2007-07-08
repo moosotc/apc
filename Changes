@@ -1,3 +1,10 @@
+3
+ * Somewhat working gzh mode
+
+ * `/proc/uptime' sampler (applicable only on uniprocessors)
+
+ * Proper sampling (+1)
+
 2
  * Proper time difference calculation in the module
 

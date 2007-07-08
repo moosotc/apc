@@ -42,6 +42,12 @@ module NP = struct
   let jiffies_to_sec j =
     float j /. hz
 
+  let parse_uptime () =
+    let ic = open_in "/proc/uptime" in
+    let vals = Scanf.fscanf ic "%f %f" (fun u i -> (u, i)) in
+      close_in ic;
+      vals
+
   let nprocs = get_nprocs ()
 
   let rec parse_int_cont s pos =
@@ -104,31 +110,68 @@ module NP = struct
 end
 
 module Gzh = struct
-  let gen t f =
-    let t = 0.2 in
-    let signr, itimer = Sys.sigprof, Unix.ITIMER_PROF in
-    let t1 = ref |< Unix.gettimeofday () in
-    let handler signr =
-      let t2 = Unix.gettimeofday () in
-      let dt = t2 -. !t1 in
-        t1 := t2;
-        t /. dt |> f
+  let lim = ref 0
+  let stop = ref false
+  let refdt = ref 0.0
+
+  let rec furious_cycle i =
+    if not !stop && i > 0
+    then pred i |> furious_cycle
+    else (i, Unix.gettimeofday ())
+
+  let init verbose =
+    let t = 1e-6 in
+    let it = { Unix.it_interval = t; it_value = t } in
+    let handler =
+      let n = ref 10 in
+        fun _ ->
+          decr n;
+          stop := !n = 0;
     in
+    let sign = Sys.sigalrm in
+    let oldh = Sys.signal sign |< Sys.Signal_handle handler in
+    let oldi = Unix.setitimer Unix.ITIMER_REAL it in
+    let oldbp = Unix.sigprocmask Unix.SIG_BLOCK [sign] in
+    let () = NP.waitalrm () in
+    let () = stop := false in
+    let () = NP.setnice 20 in
+    let oldup = Unix.sigprocmask Unix.SIG_UNBLOCK [sign] in
+    let t1 = Unix.gettimeofday () in
+    let n, t2 = furious_cycle max_int in
+    let () = refdt := t2 -. t1 in
+    let () = lim := max_int - n in
+    let () = if verbose then
+        begin
+          printf "completed %d iterations in %f seconds@." !lim !refdt
+        end in
+    let () = NP.setnice ~-20 in
+    let _ = Unix.sigprocmask Unix.SIG_UNBLOCK oldup in
+    let _ = Unix.setitimer Unix.ITIMER_REAL oldi in
+    let _ = Unix.sigprocmask Unix.SIG_BLOCK oldbp in
+    let _ = Sys.signal sign oldh in
+      ()
+  ;;
+
+  let gen f =
     let thf () =
       NP.setnice 20;
-      let it = { Unix.it_interval = t; it_value = t } in
-      let _ = Sys.signal signr |< Sys.Signal_handle handler in
-      let _ = Unix.setitimer itimer it in
-      let _ = Unix.sigprocmask Unix.SIG_UNBLOCK |< [signr] |> ignore in
-      let rec loop i = succ i |> loop in loop 0
+      stop := false;
+      let rec loop t1 =
+        let _, t2 = furious_cycle !lim in
+        let dt = t2 -. t1 in
+          dt /. !refdt |> f;
+          loop t2
+      in
+        Unix.gettimeofday () |> loop
     in
     let _ = Thread.create thf () in
       ()
+  ;;
 end
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.92"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.93"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -151,6 +194,8 @@ module Args = struct
   let scalebar = ref false
   let timer = ref 100
   let debug = ref false
+  let polys = ref false
+  let uptime = ref false
 
   let pad n s =
     let l = String.length s in
@@ -201,10 +246,13 @@ module Args = struct
       ; sI "t" timer "timer frequency in herz"
       ; sS "d" devpath "path to itc device"
       ; cB "k" ksampler "do not use `/proc/stat'"
-      (* ; sB "g" gzh "gzh way" *)
+      ; sB "g" gzh "gzh way (does not quite work yet)"
+      ; sB "u" uptime
+        "use `/proc/uptime' instead of `/proc/stat` (UniProcessor only)"
       ; sB "v" verbose "verbose"
       ; sB "S" sigway "sigwait delay method"
       ; sB "c" scalebar "constant bar width"
+      ; sB "P" polys "use polygons"
       ]
       (fun s ->
         "don't know what to do with " ^ s |> prerr_endline;
@@ -252,9 +300,10 @@ end
 
 module Sampler(T : sig val nsamples : int val freq : float end) =
 struct
-  let nsamples = T.nsamples
+  let nsamples = T.nsamples + 1
   let samples = Array.create nsamples 0.0
   let head = ref 0
+  let tail = ref 0
   let active = ref 0
 
   let update v n =
@@ -281,7 +330,7 @@ struct
     in
     let ry = ref (fun () -> assert false) in
     let rec yield i () =
-      if i >= !active
+      if i = !active
       then None
       else
         begin
@@ -295,7 +344,7 @@ struct
   let update t1 t2 i1 i2 =
     let d = t2 -. t1 in
     let i = i2 -. i1 in
-    let isamples = truncate (d /. T.freq) in
+    let isamples = d /. T.freq |> truncate in
     let l = 1.0 -. (i /. d) in
       update l isamples;
 end
@@ -603,7 +652,15 @@ module Graph (V: View) = struct
 
     let sample sampler =
       GlDraw.color sampler.color;
-      GlDraw.begins `line_strip;
+      let () =
+        if not !Args.polys
+        then GlDraw.begins `line_strip
+        else
+          begin
+            GlDraw.begins `polygon;
+            GlDraw.vertex2 (0.0, 0.0);
+          end
+      in
       let yield = sampler.getyielder () in
       let rec loop last i =
         match yield () with
@@ -611,15 +668,16 @@ module Graph (V: View) = struct
               let x = float i *. scale in
                 GlDraw.vertex ~x ~y ();
                 loop opty (succ i)
-          | None -> last, succ i
+          | None ->
+              if !Args.polys
+              then
+                match last with
+                  | None -> ()
+                  | Some y ->
+                      let x = float (pred i) *. scale in
+                        GlDraw.vertex ~x ~y:0.0 ()
       in
-      let () =
-        match loop None 0 with
-          | None, _ -> ()
-          | Some y, i ->
-              let x = float i *. scale in
-                GlDraw.vertex ~x ~y ()
-      in
+        loop None 0;
         GlDraw.ends ();
     in
       List.iter sample V.samplers
@@ -694,8 +752,21 @@ let create fd w h =
         then
           let d = ref 0.0 in
           let f d' = d := d' in
-          let () = Gzh.gen 1.0 f in
-            fun _ _ _ -> 0.0, !d
+          let () = Gzh.gen f in
+            fun _ _ _ -> (0.0, !d)
+        else
+          if !Args.uptime
+        then
+          let (u1, i1) = NP.parse_uptime () in
+          let u1 = ref u1
+          and i1 = ref i1 in
+            fun _ _ _ ->
+              let (u2, i2) = NP.parse_uptime () in
+              let du = u2 -. !u1
+              and di = i2 -. !i1 in
+                u1 := u2;
+                i1 := i2;
+                (0.0, di /. du)
         else
           let i' = if i = NP.nprocs then 0 else succ i in
           let n = NP.idle in
@@ -706,7 +777,7 @@ let create fd w h =
               let i1' = NP.jiffies_to_sec !i1
               and i2' = NP.jiffies_to_sec i2 in
                 i1 := i2;
-                i1', i2'
+                (i1', i2')
       in
         calc, sampler
     in
@@ -733,7 +804,7 @@ let create fd w h =
           let i2 = Array.get is i in
           let i1' = !i1 in
             i1 := i2;
-            i1', i2
+            (i1', i2)
     in
     let kaccu =
       if !Args.ksampler
@@ -763,6 +834,7 @@ let opendev path =
 let main () =
   let _ = Glut.init [|""|] in
   let () = Args.init () in
+  let () = if !Args.gzh then Gzh.init !Args.verbose in
   let () = Delay.init !Args.timer !Args.gzh in
   let () = if !Args.niceval != 0 then NP.setnice !Args.niceval in
   let w = !Args.w
@@ -781,8 +853,8 @@ let main () =
   in
   let rec loop t1 () =
     let t2 = Unix.gettimeofday () in
-    let d = t2 -. t1 in
-      if d >= !Args.freq
+    let dt = t2 -. t1 in
+      if dt >= !Args.freq
       then
         let is = iget () in
         let ks = kget () in
@@ -790,7 +862,7 @@ let main () =
           | [] -> load
           | (nr, calc, sampler, _) :: rest ->
               let i1, i2 = calc s t1 t2 in
-              let thisload = (1.0 -. ((i2 -. i1) /. (t2 -. t1))) in
+              let thisload = 1.0 -. ((i2 -. i1) /. dt) in
               let () =
                 if !Args.verbose
                 then

@@ -32,7 +32,6 @@ static void failwith_fmt (const char *fmt, ...)
     failwith (buf);
 }
 
-
 CAMLprim value ml_waitalrm (value unit_v)
 {
     CAMLparam1 (unit_v);

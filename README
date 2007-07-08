@@ -7,11 +7,15 @@ kernel HZ value evenly.
 
 Kernel can use variety of values for HZ (most frequent: 100 250 1000)
 
-PAL/SECAM video frame grabbers do so  with 25/50 FPS frequency, if the
-pulse  leads  to some  application deciding  to burn CPU  (putting the
+PAL/SECAM video frame grabbers do so with  25/50 FPS frequency, if the
+pulse  leads  to some  application deciding to  burn CPU  (putting the
 frame on the screen, encoding it, etc)  chances are good that the load
-you will  see in  top(1) (or anything   `/proc/stat' based) would  not
+you will   see in top(1)   (or anything `/proc/stat'  based) would not
 represent reality accurately. Ditto for plain video clips.
+
+Furthermore `/proc/stat'  exports monotonically increasing  load times
+but _NOT_  real time[1], so  there's omni-present sub-jiffy error. Not
+to mention that jiffy resolution is somewhat low.
 
 If you  depend  on  sorta-kinda   semi-correct  load  meter  in  those
 conditions APC might present a better choice.
@@ -23,18 +27,18 @@ yellow color, values obtained via `/proc/stat' are represented by red.
 You  can use `-help' command  line option to   get a brief overview of
 tunable parameters.
 
-Tested on[1]:
+Tested on[2]:
 
 Linux 2.4.30   - AMD Athlon(tm) Processor (1.4 Ghz)
 Linux 2.6.17.6 - AMD Athlon(tm)64 X2 Dual Core Processor  3800+
-Linux 2.6.28   - AMD Athlon(tm)64 3800+
+Linux 2.6.18   - AMD Athlon(tm)64 3800+
 
-It's possible  that RMClock[2]  does something similar(load  measuring
+It's possible  that RMClock[3]  does something similar(load  measuring
 wise) on Microsoft Windows.
 
-[1] SMP not tested on 2.4 kernels (nor QUIRK mode)
-[2] http://cpu.rightmark.org/products/rmclock.shtml
-
+[1] Unlike `/proc/uptime'. But this one is useless for SMP
+[2] SMP not tested on 2.4 kernels (nor QUIRK mode)
+[3] http://cpu.rightmark.org/products/rmclock.shtml
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 To build you will need:
@@ -42,6 +46,8 @@ To build you will need:
 OCaml  - http://caml.inria.fr/ocaml/
 LablGL - http://wwwfun.kurims.kyoto-u.ac.jp/soft/lsl/lablgl.html
          (and by extension some OpenGL implementation)
+GLUT   - http://www.opengl.org/resources/libraries/glut/
+         http://freeglut.sourceforge.net/
 GCC    - http://gcc.gnu.org/
 
 Plus all what is required to build a kernel module.
@@ -64,7 +70,7 @@ Variant 1
 
 Variant 2 (DANGEROUS)
     ------------------------------------------------------------------
-    Kernel 2.6 
+    Kernel 2.6
     $ func=$(awk '/default_idle$/ {print "0x" $1}' /proc/kallsyms)
     $ su -c "insmod ./itc.ko idle_func=$func"
 
