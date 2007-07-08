@@ -3,11 +3,12 @@ WARNING
 
 The kernel module part of this program messes with internal affairs of
 the kernel, while best effort was put into making it safe, there are:
-               NO GUARANTEES WHATSOEVER
 
-Furthermore  removing the  previous   versions   of the module    (via
-rmmod(8))    caused     one  particular   kernel    version  to  panic
-(2.6.8-2-686-SMP form Debian), to  the  best  of my  current  knowledge
+                     NO GUARANTEES WHATSOEVER
+
+Furthermore  removing the  previous    versions  of the  module   (via
+rmmod(8))      caused  one  particular      kernel   version to  panic
+(2.6.8-2-686-SMP  form Debian), to  the best  of  my current knowledge
 panics are only possible on SMP machines (and with maxcpus > 1).  Pair
 of safety nets were added and this  particular kernel no longer panics
 upon module removal, but, again, three words in caps above apply.
@@ -27,42 +28,36 @@ This is APC - graphical CPU load meter.
 It is more suitable/accurate in situations where applications generate
 "short" periodic bursts of activity.
 
-It works by timing the time spent in the kernels idle handler. CPU
+It works by measuring the time spent in  the kernels idle handler. CPU
 load time is taken to mean:
+
      time spent in idle handler
 1 -  --------------------------
         total time elapsed
 
-Kernel can use variety of values for HZ (most frequent: 100 250 1000)
+Con Kolivas  in  his post on   LKML (http://lkml.org/lkml/2007/2/12/7)
+described  the way   Linux  gathers information   that it exports   to
+`/proc/stat' (at least for "boring"  architectures), this method is by
+no means accurate.
 
-PAL/SECAM video frame grabbers do so with  25/50 FPS frequency, if the
-pulse leads to   some application deciding  to  burn CPU (putting  the
-frame on the screen, encoding it, etc) chances  are good that the load
-you will  see  in top(1)  (or anything  `/proc/stat' based) would  not
-represent reality  accurately. Ditto for plain  video clips playing at
-25 fps.
+You can witness this  by running the `hog'  example and, if  stars are
+aligned  correctly, you will notice  that something is wrong with what
+`/proc/stat' claims. Since most of the CPU monitoring applications use
+`/proc/stat' they will produce incorrect results too.
 
-When   frequency of aforementioned    bursts  divides HZ value  evenly
-reading `/proc/stat'  or `/proc/uptime'  can  make an  impression that
-sometimes machine gets loaded for a brief period of time but then goes
-idle again (for a while) then the cycle repeats. This is not the case,
-the machine  is constantly loaded (well  according to ad-hoc measuring
-via background "niced" process and/or APC)
+Apart    from   being inaccurate,  `/proc/stat'  exports monotonically
+increasing load times but _NOT_  real time[1], so there's omni-present
+sub-jiffy error. Not to mention that jiffy resolution is somewhat low.
 
-If this line of thinking is correct one can not notice any load at all
-while watching  NTSC  content  (30fps - does not  divide  100/250/1000
-evenly)
+If you depend on sorta-kinda semi-correct load meter in situation when
+`/proc/stat'  is disconnected with reality  APC might present a better
+choice.
 
-Furthermore `/proc/stat'  exports monotonically increasing  load times
-but _NOT_  real time[1], so  there's omni-present sub-jiffy error. Not
-to mention that jiffy resolution is somewhat low.
-
-If you  depend  on  sorta-kinda   semi-correct  load  meter  in  those
-conditions APC might present a better choice.
-
-The kernel  module   part of APC  measures  how  much time   is  spent
-executing idle kernel function   - this information is  represented by
-yellow color, values obtained via `/proc/stat' are represented by red.
+The kernel  module part  of APC   tries to insert  itself  as  a power
+management idle  handler and when  invoked measure  how  much time  is
+spent executing previous/default one - this information is represented
+by yellow color, values  obtained via `/proc/stat' are represented  by
+red.
 
 You  can use `-help' command  line option to   get a brief overview of
 tunable parameters.
