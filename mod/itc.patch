@@ -1,0 +1,15 @@
+--- itc-mod.c.orig	2007-06-11 12:05:44.000000000 +0400
++++ itc-mod.c	2007-06-11 12:06:20.000000000 +0400
+@@ -143,12 +143,8 @@
+  *
+  **********************************************************************/
+ #if LINUX_VERSION_CODE > KERNEL_VERSION (2, 6, 0)
+-#ifndef CONFIG_APM
+ #define QUIRK
+ #endif
+-#else
+-void default_idle (void);
+-#endif
+ 
+ static void
+ itc_monotonic (struct timeval *tv)
