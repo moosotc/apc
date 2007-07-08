@@ -41,9 +41,15 @@ CAMLprim value ml_waitalrm (value unit_v)
 
     sigemptyset (&set);
     sigaddset (&set, SIGALRM);
-    if (sigwait (&set, &signr)) {
-        failwith_fmt ("sigwait: %s", strerror (errno));
+
+    caml_enter_blocking_section ();
+    {
+        if (sigwait (&set, &signr)) {
+            failwith_fmt ("sigwait: %s", strerror (errno));
+        }
     }
+    caml_leave_blocking_section ();
+
     CAMLreturn (Val_unit);
 }
 

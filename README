@@ -23,16 +23,18 @@ yellow color, values obtained via `/proc/stat' are represented by red.
 You  can use `-help' command  line option to   get a brief overview of
 tunable parameters.
 
-Tested on:
+Tested on[1]:
 
 Linux 2.4.30   - AMD Athlon(tm) Processor (1.4 Ghz)
 Linux 2.6.17.6 - AMD Athlon(tm)64 X2 Dual Core Processor  3800+
 Linux 2.6.28   - AMD Athlon(tm)64 3800+
 
-It's possible  that RMClock[1]  does something similar(load  measuring
+It's possible  that RMClock[2]  does something similar(load  measuring
 wise) on Microsoft Windows.
 
-[1] http://cpu.rightmark.org/products/rmclock.shtml
+[1] SMP not tested on 2.4 kernels (nor QUIRK mode)
+[2] http://cpu.rightmark.org/products/rmclock.shtml
+
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 To build you will need:
@@ -62,7 +64,7 @@ Variant 1
 
 Variant 2 (DANGEROUS)
     ------------------------------------------------------------------
-    Kernel 2..6 
+    Kernel 2.6 
     $ func=$(awk '/default_idle$/ {print "0x" $1}' /proc/kallsyms)
     $ su -c "insmod ./itc.ko idle_func=$func"
 

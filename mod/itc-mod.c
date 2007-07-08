@@ -34,7 +34,10 @@
 
 MODULE_DESCRIPTION ("Idle time collector");
 
+/* there are many ways to prevent gcc from complaining about module_param
+   and function pointer vs long, but let's not */
 static void (*idle_func) (void);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 0)
 MODULE_PARM (idle_func, "l");
 #else
@@ -47,7 +50,43 @@ static spinlock_t lock = SPIN_LOCK_UNLOCKED;
 
 static void (*orig_pm_idle) (void);
 static unsigned int itc_major;
-static struct timeval total_idle_tv[NR_CPUS];
+
+struct itc
+{
+  struct timeval cumm_sleep_time;
+  struct timeval sleep_started;
+  int sleeping;
+};
+
+static struct itc global_itc[NR_CPUS];
+
+/**********************************************************************
+ *
+ * Utility functions
+ *
+ **********************************************************************/
+static void
+cpeamb (struct timeval *c, struct timeval *a, struct timeval *b)
+{
+  __typeof (c->tv_sec) sec = a->tv_sec - b->tv_sec;
+  __typeof (c->tv_usec) usec = a->tv_usec - b->tv_usec;
+
+  if (usec < 0)
+    {
+      sec -= 1;
+      usec = 1000000 + usec;
+    }
+  c->tv_usec += usec;
+  if (c->tv_usec > 1000000)
+    {
+      c->tv_sec += sec + 1;
+      c->tv_usec -= 1000000;
+    }
+  else
+    {
+      c->tv_sec += sec;
+    }
+}
 
 /**********************************************************************
  *
@@ -104,26 +143,38 @@ static ssize_t
 itc_read (struct file *file, char * buf, size_t count, loff_t * ppos)
 {
   int i;
-  size_t itemsize = sizeof (total_idle_tv[0]);
+  size_t itemsize = sizeof (global_itc[0].cumm_sleep_time);
   ssize_t retval = 0;
   unsigned long flags;
+  struct itc *itc = &global_itc[0];
 
   /* printk ("itemsize=%d cpus=%d count=%d\n", itemsize, NR_CPUS, count); */
   if (count < itemsize * NB_CPUS)
     {
-      printk (KERN_ERR "attempt to read something funny %d expected %d(%d,%d)\n",
+      printk (KERN_ERR
+              "attempt to read something funny %d expected %d(%d,%d)\n",
               count, itemsize * NB_CPUS, itemsize, NB_CPUS);
       return -EINVAL;
     }
 
   spin_lock_irqsave (&lock, flags);
-  for (i = 0; i < NB_CPUS; ++i)
+  for (i = 0; i < NB_CPUS; ++i, ++itc)
     {
-      if (copy_to_user (buf, &total_idle_tv[i], itemsize))
+      if (itc->sleeping)
+        {
+          struct timeval tv;
+
+          do_gettimeofday (&tv);
+          cpeamb (&itc->cumm_sleep_time, &tv, &itc->sleep_started);
+          itc->sleep_started.tv_sec = tv.tv_sec;
+          itc->sleep_started.tv_usec = tv.tv_usec;
+        }
+
+      if (copy_to_user (buf, &itc->cumm_sleep_time, itemsize))
         {
           printk (KERN_ERR "failed to write %zu bytes to %p\n", itemsize, buf);
-          spin_unlock_irqrestore (&lock, flags);
-          return -EFAULT;
+          retval = -EFAULT;
+          break;
         }
       retval += itemsize;
       buf += itemsize;
@@ -161,17 +212,13 @@ void default_idle (void);
 static void
 itc_idle (void)
 {
-  struct timeval tv1, tv2, tv3, *t;
-  suseconds_t usec;
+  struct itc *itc;
+  struct timeval tv;
   unsigned long flags;
 
   spin_lock_irqsave (&lock, flags);
-  t = &total_idle_tv[smp_processor_id ()];
-  tv3.tv_sec = t->tv_sec;
-  tv3.tv_usec = t->tv_usec;
-  t->tv_sec = 0;
-  t->tv_usec = 0;
-  do_gettimeofday (&tv1);
+  itc = &global_itc[smp_processor_id ()];
+  do_gettimeofday (&itc->sleep_started);
   spin_unlock_irqrestore (&lock, flags);
 
 #ifdef QUIRK
@@ -202,16 +249,9 @@ itc_idle (void)
 #endif
 
   spin_lock_irqsave (&lock, flags);
-  do_gettimeofday (&tv2);
-  usec = tv2.tv_usec - tv1.tv_usec + tv3.tv_usec;
-  tv3.tv_sec += (tv2.tv_sec - tv1.tv_sec);
-  while (usec > 1000000)
-    {
-      usec -= 1000000;
-      tv3.tv_sec += 1;
-    }
-  t->tv_usec = usec;
-  t->tv_sec = tv3.tv_sec;
+  do_gettimeofday (&tv);
+  cpeamb (&itc->cumm_sleep_time, &tv, &itc->sleep_started);
+  itc->sleeping = 0;
   spin_unlock_irqrestore (&lock, flags);
 }
 
@@ -228,10 +268,11 @@ init (void)
 #ifdef QUIRK
   if (!pm_idle && !idle_func)
     {
-      printk (KERN_ERR
-              "itc: no idle function\n"
-              "itc: boot kernel with idle=halt option\n"
-              "itc: or specify idle_func (modprobe its idle_func=<address>\n");
+      printk
+        (KERN_ERR
+         "itc: no idle function\n"
+         "itc: boot kernel with idle=halt option\n"
+         "itc: or specify idle_func (modprobe itc idle_func=<address>)\n");
       return -ENODEV;
     }
 #endif
@@ -251,7 +292,7 @@ init (void)
 
   printk
     (KERN_DEBUG
-     "itc: driver successfully loaded pm_idle=%p default_idle=%p, idle_func=%p\n",
+     "itc: driver loaded pm_idle=%p default_idle=%p, idle_func=%p\n",
      pm_idle,
 #ifdef QUIRK
      NULL,

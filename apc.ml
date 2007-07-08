@@ -103,20 +103,32 @@ module NP = struct
       "./"
 end
 
-let niceth nprocs =
-  for i = 0 to pred nprocs
-  do
-    Thread.create
-      (fun () ->
-        NP.setnice 20;
-        let rec loop i = succ i |> loop in loop 0
-      )
-      () |> ignore
-  done
+module Gzh = struct
+  let gen t f =
+    let t = 0.2 in
+    let signr, itimer = Sys.sigprof, Unix.ITIMER_PROF in
+    let t1 = ref |< Unix.gettimeofday () in
+    let handler signr =
+      let t2 = Unix.gettimeofday () in
+      let dt = t2 -. !t1 in
+        t1 := t2;
+        t /. dt |> f
+    in
+    let thf () =
+      NP.setnice 20;
+      let it = { Unix.it_interval = t; it_value = t } in
+      let _ = Sys.signal signr |< Sys.Signal_handle handler in
+      let _ = Unix.setitimer itimer it in
+      let _ = Unix.sigprocmask Unix.SIG_UNBLOCK |< [signr] |> ignore in
+      let rec loop i = succ i |> loop in loop 0
+    in
+    let _ = Thread.create thf () in
+      ()
+end
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.91"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.92"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -132,16 +144,13 @@ module Args = struct
   let delay = ref 0.04
   let ksampler = ref true
   let barw = ref 100
-  let bars = ref 100
+  let bars = ref 50
   let sigway = ref true
   let niceval = ref 0
   let gzh = ref false
-
-  let dA tos s {contents=v} = s ^ " (" ^ tos v ^ ")"
-  let dF = dA string_of_float
-  let dB = dA string_of_bool
-  let dI = dA string_of_int
-  let dS = dA (fun s -> "`" ^ String.escaped s ^ "'")
+  let scalebar = ref false
+  let timer = ref 100
+  let debug = ref false
 
   let pad n s =
     let l = String.length s in
@@ -155,6 +164,13 @@ module Args = struct
             ~dst_pos:0;
           d
 
+  let dA tos s {contents=v} = s ^ " (" ^ tos v ^ ")"
+  let dF = dA |< sprintf "%4.2f"
+  let dB = dA string_of_bool
+  let dcB = dA (fun b -> not b |> string_of_bool)
+  let dI = dA string_of_int
+  let dS = dA (fun s -> "`" ^ String.escaped s ^ "'")
+
   let sF opt r doc =
     "-" ^ opt, Arg.Set_float r, pad 9 "<float> " ^ doc |> dF |< r
 
@@ -164,28 +180,31 @@ module Args = struct
   let sB opt r doc =
     "-" ^ opt, Arg.Set r, pad 9 "" ^ doc |> dB |< r
 
-  let sBc opt r doc =
-    "-" ^ opt, Arg.Clear r, pad 9 "" ^ doc |> dB |< r
+  let cB opt r doc =
+    "-" ^ opt, Arg.Clear r, pad 9 "" ^ doc |> dcB |< r
 
   let sS opt r doc =
     "-" ^ opt, Arg.Set_string r, pad 9 "<string> " ^ doc |> dS |< r
 
   let init () =
     Arg.parse
-      [ sF "f" freq "update frequency"
-      ; sF "D" delay "refresh delay"
-      ; sF "i" interval "interval"
-      ; sI "p" pgrid "pgrid"
-      ; sI "s" sgrid "sgrid"
+      [ sF "f" freq "sampling frequency in seconds"
+      ; sF "D" delay "refresh delay in seconds"
+      ; sF "i" interval "history interval in seconds"
+      ; sI "p" pgrid "percent grid"
+      ; sI "s" sgrid "history grid"
       ; sI "w" w "width"
       ; sI "h" h "height"
       ; sI "b" barw "bar width"
       ; sI "B" bars "number of CPU bars"
       ; sI "n" niceval "value to renice self on init"
+      ; sI "t" timer "timer frequency in herz"
       ; sS "d" devpath "path to itc device"
-      ; sBc "k" ksampler "do not show kernel view"
+      ; cB "k" ksampler "do not use `/proc/stat'"
+      (* ; sB "g" gzh "gzh way" *)
       ; sB "v" verbose "verbose"
       ; sB "S" sigway "sigwait delay method"
+      ; sB "c" scalebar "constant bar width"
       ]
       (fun s ->
         "don't know what to do with " ^ s |> prerr_endline;
@@ -209,15 +228,16 @@ let oohz oohz fn =
 module Delay = struct
   let sighandler signr = ()
 
-  let init () =
+  let init freq gzh =
     let () =
       Sys.Signal_handle sighandler |> Sys.set_signal Sys.sigalrm;
       if !Args.sigway
       then
-        Unix.sigprocmask Unix.SIG_BLOCK [Sys.sigalrm] |> ignore
+        let l = if gzh then [Sys.sigprof; Sys.sigvtalrm] else [] in
+          Unix.sigprocmask Unix.SIG_BLOCK |< Sys.sigalrm :: l |> ignore;
       ;
     in
-    let v = 1e-6 /. !Args.freq in
+    let v = 1.0 /. float freq in
     let t = { Unix.it_interval = v; it_value = v } in
     let _ = Unix.setitimer Unix.ITIMER_REAL t in
       ()
@@ -365,37 +385,20 @@ module Bar(T: sig val barw : int val bars : int end) = struct
   let bw = ref 0
   let m = 1
   let fw = 3 * Glut.bitmapWidth font (Char.code 'W')
+  let ksepsl, isepsl =
+    let base = GlList.gen_lists ~len:2 in
+      GlList.nth base ~pos:0,
+      GlList.nth base ~pos:1
 
-  let reshape w h =
-    vw := w;
-    vh := h;
-    bw := (float w *. sw |> truncate) - m;
-  ;;
+  let getlr = function
+    | `k -> 0.01, 0.49
+    | `i -> 0.51, 0.99
 
-  let display () =
-    let kload = min !kload 1.0 |> max 0.0 in
-    let iload = min !iload 1.0 |> max 0.0 in
-    let () =
-      GlDraw.viewport m 0 !bw 15;
-      GlDraw.color (1.0, 1.0, 1.0);
-      let kload = 100.0 *. kload in
-      let iload = 100.0 *. iload in
-
-        GlMat.push ();
-        GlMat.load_identity ();
-        GlMat.scale ~x:(1.0/.float !bw) ~y:(1.0/.30.0) ();
-
-        let ix = !bw / 2 - fw |> float in
-        let kx = - (fw + !bw / 2) |> float in
-          sprintf "%5.2f" iload |> draw_string ix 0.0;
-          sprintf "%5.2f" kload |> draw_string kx 0.0;
-          GlMat.pop ();
-    in
-
+  let seps ki =
+    let xl, xr = getlr ki in
     let y = 18 in
     let h = !vh - 15 - y in
     let () = GlDraw.viewport m y !bw h in
-
     let () =
       GlMat.push ();
       GlMat.load_identity ();
@@ -403,47 +406,108 @@ module Bar(T: sig val barw : int val bars : int end) = struct
       GlMat.translate ~x:~-.1.0 ~y:~-.1.0 ();
       GlMat.scale ~x:2.0 ~y:(2.0 /. float h) ()
     in
-
     let barm = 1 in
     let mspace = barm * nbars in
     let barh = (h + 66 - mspace / 2) / nbars |> float in
     let barm = float barm in
-    let yb = 0.0 in
-
-    let drawbar xl xr load =
-      let drawquads start lim yb : float =
-        let rec loop i yb =
-          if i = lim
-          then yb
-          else
-            let yt = yb +. barh in
-            let yn = yt +. barm in
-              GlDraw.vertex2 (xl, yb);
-              GlDraw.vertex2 (xl, yt);
-              GlDraw.vertex2 (xr, yt);
-              GlDraw.vertex2 (xr, yb);
-              succ i |> loop |< yn
-        in
-          GlDraw.begins `quads;
-          let yt = loop start yb in
-            GlDraw.ends ();
-            yt
-      in
-      let lim = load *. float nbars |> truncate in
-      let yb = drawquads 0 lim yb in
-        GlDraw.color (0.5, 0.5, 0.5);
-        ignore (drawquads lim nbars yb)
+    let rec loop i yb =
+      if i = T.bars
+      then ()
+      else
+        let yt = yb +. barm in
+        let yn = yt +. barh in
+          GlDraw.vertex2 (xl, yb);
+          GlDraw.vertex2 (xl, yt);
+          GlDraw.vertex2 (xr, yt);
+          GlDraw.vertex2 (xr, yb);
+          succ i |> loop |< yn
     in
-    let xl = 0.01 in
-    let xr = 0.49 in
+      GlDraw.color (0.0, 0.0, 0.0);
+      GlDraw.begins `quads;
+      loop 0 barh;
+      GlDraw.ends ();
+      GlMat.pop ();
+  ;;
+
+  let reshape w h =
+    vw := w;
+    vh := h;
+    bw :=
+      if !Args.scalebar
+      then
+        (float w *. sw |> truncate) - m
+      else
+        T.barw - m
+    ;
+
+    GlList.begins ksepsl `compile;
+    seps `k;
+    GlList.ends ();
+
+    GlList.begins isepsl `compile;
+    seps `i;
+    GlList.ends ();
+  ;;
+
+  let drawseps = function
+    | `k -> GlList.call ksepsl
+    | `i -> GlList.call isepsl
+  ;;
+
+  let display () =
+    let kload = min !kload 1.0 |> max 0.0 in
+    let iload = min !iload 1.0 |> max 0.0 in
+    let () = GlDraw.viewport m 0 !bw 15 in
+    let () =
+      GlDraw.color (1.0, 1.0, 1.0);
+      let kload = 100.0 *. kload in
+      let iload = 100.0 *. iload in
+      let () =
+        GlMat.push ();
+        GlMat.load_identity ();
+        GlMat.scale ~x:(1.0/.float !bw) ~y:(1.0/.30.0) ()
+      in
+      let ix = !bw / 2 - fw |> float in
+      let kx = - (fw + !bw / 2) |> float in
+      let () = sprintf "%5.2f" iload |> draw_string ix 0.0 in
+      let () = sprintf "%5.2f" kload |> draw_string kx 0.0 in
+      let () = GlMat.pop () in ()
+    in
+
+    let y = 18 in
+    let h = !vh - 15 - y in
+    let () = GlDraw.viewport m y !bw h in
+    let () =
+      GlMat.push ();
+      GlMat.load_identity ();
+      GlMat.rotate ~y:1.0 ~angle:180.0 ();
+      GlMat.translate ~x:~-.1.0 ~y:~-.1.0 ();
+      GlMat.scale ~x:2.0 ~y:(2.0 /. float h) ()
+    in
+    let drawbar load ki =
+      let xl, xr = getlr ki in
+      let drawquad yb yt =
+        GlDraw.begins `quads;
+        GlDraw.vertex2 (xl, yb);
+        GlDraw.vertex2 (xl, yt);
+        GlDraw.vertex2 (xr, yt);
+        GlDraw.vertex2 (xr, yb);
+        GlDraw.ends ()
+      in
+      let yt = float h *. load in
+      let yb = 0.0 in
+      let () = drawquad yb yt in
+      let () = GlDraw.color (0.5, 0.5, 0.5) in
+      let yb = yt in
+      let yt = float h in
+      let () = drawquad yb yt in
+        drawseps ki
+    in
       GlDraw.color (1.0, 1.0, 0.0);
-      drawbar xl xr iload;
-      let xl = 0.51 in
-      let xr = 0.99 in
-        GlDraw.color (1.0, 0.0, 0.0);
-        drawbar xl xr kload;
-        GlDraw.color (1.0, 1.0, 1.0);
-        GlMat.pop ();
+      drawbar iload `k;
+      GlDraw.color (1.0, 0.0, 0.0);
+      drawbar kload `i;
+      GlMat.pop ();
   ;;
 
   let update kload' iload' =
@@ -453,9 +517,10 @@ module Bar(T: sig val barw : int val bars : int end) = struct
 end
 
 module Graph (V: View) = struct
-  let sw = float V.w /. float !Args.w
+  let ox = if !Args.scalebar then 0 else !Args.barw
+  let sw = float V.w /. float (!Args.w - ox)
   let sh = float V.h /. float !Args.h
-  let sx = float V.x /. float V.w
+  let sx = float (V.x - ox)  /. float V.w
   let sy = float V.y /. float V.h
   let vw = ref 0
   let vh = ref 0
@@ -469,10 +534,11 @@ module Graph (V: View) = struct
       GlList.nth base ~pos:0
 
   let viewport typ =
+    let ox = if !Args.scalebar then 0 else !Args.barw in
     let x, y, w, h =
       match typ with
-        | `labels -> (!vx, !vy + 5, fw, !vh - 20)
-        | `graph  -> (!vx + fw + 5, !vy + 5, !vw - fw - 10, !vh - 20)
+        | `labels -> (!vx + ox, !vy + 5, fw, !vh - 20)
+        | `graph  -> (!vx + fw + 5 + ox, !vy + 5, !vw - fw - 10, !vh - 20)
     in
       GlDraw.viewport x y w h
 
@@ -515,7 +581,7 @@ module Graph (V: View) = struct
   ;;
 
   let reshape w h =
-    let wxsw = float w *. sw
+    let wxsw = float (w - ox) *. sw
     and hxsh = float h *. sh in
       vw := wxsw |> truncate;
       vh := hxsh |> truncate;
@@ -531,7 +597,6 @@ module Graph (V: View) = struct
   ;;
 
   let display () =
-    (* grid (); *)
     GlList.call gridlist;
     GlDraw.line_width 1.5;
     viewport `graph;
@@ -558,6 +623,7 @@ module Graph (V: View) = struct
         GlDraw.ends ();
     in
       List.iter sample V.samplers
+  ;;
 
   let funcs = display, reshape
 end
@@ -624,33 +690,23 @@ let create fd w h =
         }
       in
       let calc =
-        let i' = if i = NP.nprocs then 0 else succ i in
-          if !Args.gzh
-          then
-            let g ks =
-              let ks = Array.get ks i' |> snd in
-              let user = Array.get ks NP.user in
-              let nice = Array.get ks NP.nice in
-              let _idle = Array.get ks NP.idle in
-                NP.jiffies_to_sec (nice - user)
-            in
-            let i1 = g ks |> ref in
-              fun ks t1 t2 ->
-                let i2 = g ks in
-                let i1' = !i1
-                and i2' = i2 in
-                  i1 := i2;
-                  0.0, 1.0 -. (i2' -. i1')
-          else
-            let n = NP.idle in
-            let g ks = Array.get ks i' |> snd |> Array.get |< n in
-            let i1 = g ks |> ref in
-              fun ks t1 t2 ->
-                let i2 = g ks in
-                let i1' = NP.jiffies_to_sec !i1
-                and i2' = NP.jiffies_to_sec i2 in
-                  i1 := i2;
-                  i1', i2'
+        if !Args.gzh
+        then
+          let d = ref 0.0 in
+          let f d' = d := d' in
+          let () = Gzh.gen 1.0 f in
+            fun _ _ _ -> 0.0, !d
+        else
+          let i' = if i = NP.nprocs then 0 else succ i in
+          let n = NP.idle in
+          let g ks = Array.get ks i' |> snd |> Array.get |< n in
+          let i1 = g ks |> ref in
+            fun ks t1 t2 ->
+              let i2 = g ks in
+              let i1' = NP.jiffies_to_sec !i1
+              and i2' = NP.jiffies_to_sec i2 in
+                i1 := i2;
+                i1', i2'
       in
         calc, sampler
     in
@@ -675,17 +731,9 @@ let create fd w h =
       let i1 = Array.get is i |> ref in
         fun is t1 t2 ->
           let i2 = Array.get is i in
-          let result =
-            if i2 = 0.0
-            then
-              let () = i1 := !i1 +. (t2 -. t1) in
-                t1, t2
-            else
-              let i1' = !i1 in
-                i1 := i2;
-                i1', i2
-          in
-            result
+          let i1' = !i1 in
+            i1 := i2;
+            i1', i2
     in
     let kaccu =
       if !Args.ksampler
@@ -715,9 +763,8 @@ let opendev path =
 let main () =
   let _ = Glut.init [|""|] in
   let () = Args.init () in
-  let () = Delay.init () in
+  let () = Delay.init !Args.timer !Args.gzh in
   let () = if !Args.niceval != 0 then NP.setnice !Args.niceval in
-  let () = if !Args.gzh then niceth NP.nprocs in
   let w = !Args.w
   and h = !Args.h in
   let fd = opendev !Args.devpath in
@@ -743,19 +790,27 @@ let main () =
           | [] -> load
           | (nr, calc, sampler, _) :: rest ->
               let i1, i2 = calc s t1 t2 in
+              let thisload = (1.0 -. ((i2 -. i1) /. (t2 -. t1))) in
               let () =
                 if !Args.verbose
                 then
                   ("cpu load(" ^ string_of_int nr ^ "): "
-                    ^ (100.0 -. ((i2 -. i1) /. d) *. 100.0 |> string_of_float)
-                  |> prerr_endline)
+                    ^ (thisload *. 100.0 |> string_of_float)
+                  |> print_endline)
               in
-              let load = load +. (1.0 -. ((i2 -. i1) /. d)) in
+              let load = load +. thisload in
                 sampler.update t1 t2 i1 i2;
                 loop2 load s rest
         in
         let iload = loop2 0.0 is ifuncs in
         let kload = loop2 0.0 ks kfuncs in
+          if !Args.debug
+          then
+            begin
+              iload |> string_of_float |> prerr_endline;
+              kload |> string_of_float |> prerr_endline;
+            end
+          ;
           Bar.update kload iload;
           FullV.update ();
           FullV.func (Some (loop t2))

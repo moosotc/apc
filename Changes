@@ -1,0 +1,9 @@
+2
+ * Proper time difference calculation in the module
+
+ * Fixed SMP handling
+
+ * Fixes here and there
+
+1
+ * Mark `idle_func' method of geting module to load as DANGEROUS
