@@ -60,7 +60,7 @@ Variant 1
     Add `idle=halt' to the kernel command  line (method depends on the
     boot-loader) and reboot.
 
-Variant 2
+Variant 2 (DANGEROUS)
     ------------------------------------------------------------------
     Kernel 2..6 
     $ func=$(awk '/default_idle$/ {print "0x" $1}' /proc/kallsyms)

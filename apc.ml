@@ -116,7 +116,7 @@ let niceth nprocs =
 
 module Args = struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.90"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.91"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
