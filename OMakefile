@@ -1,4 +1,4 @@
-version = 0.97
+version = 0.97a
 
 ocaml-includes = -I +lablGL
 
@@ -50,7 +50,7 @@ all: byte
 apc-$(version).tgz: $(shell cat FILES)
     rm -fr apc-$(version)
     mkdir -p apc-$(version)
-    tar -T $(file FILES) -cf - -C $(dirof FILES) | tar xf - -C apc-$(version)
+    tar -T $(file FILES) -chf - -C $(dirof FILES) | tar xf - -C apc-$(version)
     tar cfz $@ apc-$(version)
 
 dist: apc-$(version).tgz

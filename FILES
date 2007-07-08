@@ -1,5 +1,6 @@
 apc.ml
 OMakefile
+OMakeroot
 mod/Makefile
 mod/OMakefile
 mod/itc-mod.c
