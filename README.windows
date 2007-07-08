@@ -1,4 +1,23 @@
 Tested on Windows XP SP2 (X86)
 SMP - tested (AMD X2 - i.e. 2 CPUs)
-Kernel accounting _IS_ innaccurate
-No kernel mode driver hence no workaround
+Kernel accounting _IS_ inaccurate
+
+Apparently RMClock (http://cpu.rightmark.org/products/rmclock.shtml)
+either somehow sets CR4.PCE or hooks to the #GP(0) handler so that
+RDPMC works from userspace.
+
+Therefore if RMClock is running, APC can invoked with `-M' switch and
+by sampling TSC/PMC0 one can estimate the idleness of the system.
+
+No idea how this behaves in presence of frequent (no pun intended)
+CPU frequency changes.
+
+As it is now ml_apc.c must be compiled with the compiler supporting
+Microsoft style inline assembly, in other words compilation will most
+likely fail if trying to build with Mingw or Cygwin based OCaml
+distribution.
+
+
+                    CLOCKS IN UNHALTED STATE
+Idle factor =  1 -  ------------------------
+                         TOTAL CLOCKS

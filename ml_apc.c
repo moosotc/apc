@@ -190,7 +190,25 @@ static struct {
     HMODULE hmod;
     QuerySystemInformationProc QuerySystemInformation;
     ULONG nprocs;
+    double prevtime;
+    struct {
+        double clocks;
+        double unhalted;
+        double total;
+    } prev[64];
 } glob;
+
+static double gettime (void)
+{
+    FILETIME ft;
+    uint64 tmp;
+
+    GetSystemTimeAsFileTime (&ft);
+    tmp = ft.dwHighDateTime;
+    tmp <<= 32;
+    tmp |= ft.dwLowDateTime;
+    return tmp * 1e-7;
+}
 
 static void init (void)
 {
@@ -207,6 +225,7 @@ static void init (void)
                 "could not obtain ZwQuerySystemInformation entry point: %#lx",
                 GetLastError ());
         }
+        glob.prevtime = gettime ();
     }
 }
 
@@ -239,12 +258,58 @@ CAMLprim value ml_waitalrm (value unit_v)
     CAMLreturn (Val_unit);
 }
 
+static void pmc (int nproc, double *clocksp, double *unhaltedp)
+{
+    unsigned int h1, l1, h2, l2, p;
+    uint64 tmp;
+    DWORD prevmask;
+
+    prevmask = SetThreadAffinityMask (GetCurrentThread (), 1 << nproc);
+    if (!prevmask) {
+        failwith_fmt ("SetThreadAffinityMask failed: %ld\n", GetLastError ());
+    }
+
+#ifndef _MSC_VER
+#error Not yet written
+#endif
+
+    _asm {
+        pushad;
+        mov eax, 1;
+        cpuid;
+        mov p, ebx;
+        rdtsc;
+        mov l1, eax;
+        mov h1, edx;
+        xor ecx, ecx;
+        rdpmc;
+        mov l2, eax;
+        mov h2, edx;
+        popad;
+    }
+
+    tmp = h1;
+    tmp <<= 32;
+    tmp |= l1;
+    *clocksp = tmp;
+
+    tmp = h2;
+    tmp <<= 32;
+    tmp |= l2;
+    *unhaltedp = tmp;
+    /* printf ("[%d] = %f %f %x\n", p >> 24, *clocksp, *unhaltedp, prevmask); */
+}
+
 static void get_nprocs (void)
 {
     SYSTEM_BASIC_INFORMATION sbi;
 
     qsi (0, &sbi, sizeof (sbi));
     glob.nprocs = sbi.NumberProcessors;
+    if (glob.nprocs > 64) {
+        failwith_fmt ("Hmm... the future is now, but i'm not ready %d",
+                      glob.nprocs);
+    }
 }
 
 CAMLprim value ml_get_nprocs (value unit_v)
@@ -340,6 +405,34 @@ CAMLprim value ml_os_type (value unit_v)
     CAMLreturn (Val_int (WINDOWS_TAG));
 }
 
+CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
+{
+    CAMLparam2 (fd_v, nprocs_v);
+    CAMLlocal1 (res_v);
+    double now, delta;
+    int i;
+
+    now = gettime ();
+    delta = now - glob.prevtime;
+    glob.prevtime = now;
+
+    res_v = caml_alloc (glob.nprocs * Double_wosize, Double_array_tag);
+    for (i = 0; i < glob.nprocs; ++i) {
+        double d;
+        double clocks, unhalted;
+        double dc, du;
+
+        pmc (i, &clocks, &unhalted);
+        dc = clocks - glob.prev[i].clocks;
+        du = unhalted - glob.prev[i].unhalted;
+        d = delta * (1.0 - du / dc);
+        glob.prev[i].clocks = clocks;
+        glob.prev[i].unhalted = unhalted;
+        glob.prev[i].total += d;
+        Store_double_field (res_v, i, glob.prev[i].total);
+    }
+    CAMLreturn (res_v);
+}
 #elif defined __sun__
 #define _POSIX_PTHREAD_SEMANTICS
 #include <alloca.h>
@@ -690,10 +783,12 @@ CAMLprim value ml_sysinfo (value unit_v)
     CAMLreturn (res_v);
 }
 
+#ifndef _WIN32
 CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
 {
     CAMLparam2 (fd_v, nprocs_v);
-    failwith_fmt ("idletimeofday is not implemented on non-Linux");
+    failwith_fmt ("idletimeofday is not implemented on non-Linux/Win32");
     CAMLreturn (Val_unit);
 }
+#endif
 #endif

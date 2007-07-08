@@ -1,4 +1,4 @@
 Tested on Mac OS X Tiger (PPC)
 SMP - not tested
-Kernel accounting appears to be rather chaotic
+Kernel accounting appears to be rather chaotic (... and wrong ...)
 No kernel mode driver hence no workaround

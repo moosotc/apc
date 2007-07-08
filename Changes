@@ -1,3 +1,6 @@
+10
+ * Use RDPMC on NT/X86 or die trying
+
 9
  * Do not show kernel-sampler CPU bar when not using kernel sampler
 

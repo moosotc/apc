@@ -1,4 +1,4 @@
-version = 0.99
+version = 1.00
 
 .PHONY: all clean dist mod opt
 .DEFAULT: all
@@ -6,7 +6,6 @@ version = 0.99
 clibs =
     if $(equal $(shell uname), SunOS)
         value -cclib -lkstat
-
 Mocamlcc (ml_apc, -Wall -Werror -g -I/usr/X11R6/include)
 Mocamlc (apc, -warn-error A -g -thread -I +lablGL)
 Mocamlopt (apc, -warn-error A -thread -I +lablGL)

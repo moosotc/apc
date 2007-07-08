@@ -287,7 +287,7 @@ end
 module Args =
 struct
   let banner =
-    [ "Amazing Piece of Code by insanely gifted programmer, Version 0.99"
+    [ "Amazing Piece of Code by insanely gifted programmer, Version 1.00"
     ; "Motivation by: gzh and afs"
     ; "usage: "
     ] |> String.concat "\n"
@@ -403,7 +403,9 @@ struct
     in
     let add_windows opts =
       isampler := false;
-      opts
+      (fB "k" ksampler |< "kernel sampler (ZwQuerySystemInformation)")
+      :: (fB "M" isampler |< "idle sampler (PMC based)")
+      :: opts
     in
     let add_macosx opts =
       isampler := false;
@@ -432,7 +434,7 @@ struct
       in
       let cpf {contents=v} s =
         if v <= 0.0
-        then (prerr_string s; prerr_endline " must be pisitive"; exit 1)
+        then (prerr_string s; prerr_endline " must be positive"; exit 1)
       in
         cp w "Width";
         cp h "Height";
