@@ -1,0 +1,36 @@
+set -e
+
+dev="/dev/itc"
+
+! test `uname -s` = "Linux" && {
+    echo `uname -s` is not Linux
+    exit 1
+}
+
+case `uname -r | cut -d. -f1,2` in
+    2.6) kms=ko;;
+    2.4) kms=o;;
+    *) echo "unknown kernel version"; exit 1;;
+esac
+
+
+test -e "build/itc.$kms" && kmod=build/itc.$kms
+test -z "$kmod" && test -e "mod/itc.$kms" && kmod=mod/itc.$kms
+
+test -z "$kmod" && {
+    echo "Kernel module does not exist"
+    exit 1
+}
+
+if ! test -c $dev; then
+    echo "ITC kernel module is not running. Will try to load $kmod."
+    su -c "insmod $kmod"
+fi
+
+if ! test -r $dev; then
+    echo "ITC is not readable. Will try to change mode."
+    su -c "chmod +r $dev"
+fi
+
+./apc -d $dev & disown
+echo "apc should be running now"
