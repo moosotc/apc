@@ -16,6 +16,9 @@
  * Add a simple script to load module and run apc (after trying
    to adjust permissions to device)
 
+ * Add a simple command line based utility to report idleness of
+   all the available processors (Linux only)
+
 11
  * Fix constant bar width
 
