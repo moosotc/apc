@@ -1,3 +1,5 @@
+#!/bin/sh
+
 set -e
 
 dev="/dev/itc"
@@ -8,8 +10,8 @@ dev="/dev/itc"
 }
 
 case `uname -r | cut -d. -f1,2` in
-    2.6) kms=ko;;
-    2.4) kms=o;;
+    2.6) kms=ko; syms=/proc/kallsyms;;
+    2.4) kms=o; syms=/proc/ksyms;;
     *) echo "unknown kernel version"; exit 1;;
 esac
 
@@ -22,9 +24,20 @@ test -z "$kmod" && {
     exit 1
 }
 
+case `uname -m` in
+    i[3456]86)
+    func=$(awk '/default_idle$/ {print "0x" $1}' $syms)
+    args="idle_func=$func"
+    ;;
+
+    *)
+    args=
+    ;;
+esac
+
 if ! test -c $dev; then
     echo "ITC kernel module is not running. Will try to load $kmod."
-    su -c "insmod $kmod"
+    su -c "insmod $kmod $args"
 fi
 
 if ! test -r $dev; then
