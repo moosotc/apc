@@ -4,3 +4,5 @@ build/*
 *.ko
 apc
 TODO
+hog
+idlestat
