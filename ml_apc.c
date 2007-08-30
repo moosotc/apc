@@ -101,7 +101,7 @@ CAMLprim value ml_idletimeofday (value fd_v, value nprocs_v)
 
     buf = alloca (n);
     if (!buf) {
-        failwith_fmt ("alloca: %s", strerror (errno));
+        failwith_fmt ("alloca failed");
     }
 
     m = read (fd, buf, n);
