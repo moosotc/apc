@@ -45,6 +45,9 @@ aligned  correctly, you will notice  that something is wrong with what
 `/proc/stat' claims. Since most of the CPU monitoring applications use
 `/proc/stat' they will produce incorrect results too.
 
+Note that  dyntick  kernels  will most   likely produce  different but
+nonetheless still incorrect accounting.
+
 Kernel (starting with version 2.6.21) comes with a document describing
 the  way accounting is currently  done and problems with this approach
 (Documentation/cpu-load.txt)
