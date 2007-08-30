@@ -15,6 +15,7 @@
 #include <linux/smp.h>
 #include <linux/mm.h>
 #include <linux/pm.h>
+#include <linux/miscdevice.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -245,6 +246,13 @@ static struct file_operations itc_fops =
     .read    = itc_read,
   };
 
+static struct miscdevice itc_misc_dev =
+  {
+    .minor = MISC_DYNAMIC_MINOR,
+    .name  = "itc",
+    .fops  = &itc_fops
+  };
+
 static int
 itc_release (struct inode * inode, struct file * filp)
 {
@@ -266,9 +274,12 @@ itc_open (struct inode * inode, struct file * filp)
   const struct file_operations *old_fops = filp->f_op;
   unsigned int minor = iminor (inode);
 
-  if (minor != 0)
+  if (itc_major)
     {
-      return -ENODEV;
+      if (minor != 0)
+        {
+          return -ENODEV;
+        }
     }
 
   if (in_use)
@@ -300,7 +311,9 @@ itc_read (struct file *file, char * buf, size_t count, loff_t * ppos)
   ssize_t retval = 0;
   unsigned long flags;
   struct itc *itc = &global_itc[0];
+  struct timeval tmp[NR_CPUS], *tmpp;
 
+  tmpp = tmp;
   if (count < itemsize * num_present_cpus ())
     {
       printk (KERN_ERR
@@ -325,19 +338,18 @@ itc_read (struct file *file, char * buf, size_t count, loff_t * ppos)
               itc->sleep_started.tv_usec = tv.tv_usec;
             }
 
-          if (copy_to_user (buf, &itc->cumm_sleep_time, itemsize))
-            {
-              printk (KERN_ERR "failed to write %zu bytes to %p\n",
-                      itemsize, buf);
-              retval = -EFAULT;
-              break;
-            }
+          *tmpp++ = itc->cumm_sleep_time;
           retval += itemsize;
-          buf += itemsize;
         }
     }
   spin_unlock_irqrestore (&lock, flags);
 
+  if (copy_to_user (buf, tmp, retval))
+    {
+      printk (KERN_ERR "failed to write %zu bytes to %p\n",
+              retval, buf);
+      retval = -EFAULT;
+    }
   return retval;
 }
 
@@ -383,17 +395,29 @@ init (void)
     }
 #endif
 
-  err = register_chrdev (itc_major, DEVNAME, &itc_fops);
-  if (err < 0 || ((itc_major && err) || (!itc_major && !err)))
+  if (itc_major)
     {
-      printk (KERN_ERR "itc: register_chrdev failed itc_major=%d err=%d\n",
-              itc_major, err);
-      return -ENODEV;
-    }
+      err = register_chrdev (itc_major, DEVNAME, &itc_fops);
+      if (err < 0 || ((itc_major && err) || (!itc_major && !err)))
+        {
+          printk (KERN_ERR "itc: register_chrdev failed itc_major=%d err=%d\n",
+                  itc_major, err);
+          return -ENODEV;
+        }
 
-  if (!itc_major)
+      if (!itc_major)
+        {
+          itc_major = err;
+        }
+    }
+  else
     {
-      itc_major = err;
+      err = misc_register (&itc_misc_dev);
+      if (err < 0)
+        {
+          printk (KERN_ERR "itc: misc_register failed err=%d\n", err);
+          return err;
+        }
     }
 
   orig_pm_idle = pm_idle;
@@ -442,7 +466,14 @@ fini (void)
 {
   printk (KERN_DEBUG "itc: unloading (resetting pm_idle to %p)\n",
           orig_pm_idle);
-  unregister_chrdev (itc_major, DEVNAME);
+  if (itc_major)
+    {
+      unregister_chrdev (itc_major, DEVNAME);
+    }
+  else
+    {
+      misc_deregister (&itc_misc_dev);
+    }
   printk (KERN_DEBUG "itc: unloaded\n");
 }
 
