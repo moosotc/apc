@@ -3,5 +3,4 @@ build/*
 *.cm*
 *.ko
 apc
-linuxapc.sh
 TODO
