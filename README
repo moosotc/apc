@@ -109,8 +109,7 @@ $ sh build.linux
 $ su -c 'insmod mod/itc.ko' - 2.6 Kernels
 $ su -c 'insmod mod/itc.o'  - 2.4 Kernels
 
-$ major=$(awk '/ itc$/ {print $1}' /proc/devices)
-$ su -c "mknod -m 0444 itc c $major 0"
+$ su -c "chmod +r /dev/itc"
 
 [make sure you are in X]
 $ ./apc
