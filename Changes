@@ -1,3 +1,14 @@
+12
+ * Do not invoke `copy_to_user' under spin lock
+   (Spotted by Luca Tettamanti)
+
+ * Switch to miscdevice API in Linux kernel module
+   (And update documentation to reflect this)
+   (Default device name is changed to `/dev/itc')
+
+ * Add some logic to not draw stuff when it doesn't fit into the
+   viewport
+
 11
  * Fix constant bar width
 
