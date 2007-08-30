@@ -21,6 +21,20 @@ let _ =
     [Filename.concat srcdir "ml_apc.c"]
     StrSet.empty
   ;
+  let prog base =
+    gcc "gcc" true
+      "-Wall -Werror -g -c" ""
+      (base ^ ".o")
+      [Filename.concat srcdir (base ^ ".c")]
+    ;
+    gcc "gcc" false
+      "" ""
+      base
+      [base ^ ".o"]
+    ;
+  in
+  prog "hog";
+  prog "idlestat";
   ocaml
     "-custom -thread -g -I +lablGL lablgl.cma lablglut.cma unix.cma threads.cma"
     "apc"
