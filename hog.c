@@ -57,9 +57,9 @@ int main (void)
     act.sa_flags = 0;
 
     it.it_interval.tv_sec = 0;
-    it.it_interval.tv_usec = 1;
+    it.it_interval.tv_usec = 1000;
     it.it_value.tv_sec = 0;
-    it.it_value.tv_usec = 1;
+    it.it_value.tv_usec = 1000;
 
     if (sigaction (SIGALRM, &act, NULL)) {
         err (EXIT_FAILURE, "sigaction failed");
