@@ -144,9 +144,7 @@ dummy_wakeup (void *unused)
  *
  **********************************************************************/
 #if LINUX_VERSION_CODE > KERNEL_VERSION (2, 6, 0)
-#ifndef CONFIG_APM
 #define QUIRK
-#endif
 #else
 void default_idle (void);
 #endif
