@@ -11,6 +11,8 @@
 
  * Make QUIRK mode uncoditional for 2.6 series of kernels
 
+ * Modify hog to use lower (than 1ns) timer frequency
+
 11
  * Fix constant bar width
 
