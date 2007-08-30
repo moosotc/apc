@@ -1,11 +1,26 @@
 #!/bin/sh
 
+#set -x
 set -e
 
-libs="unix.cma lablgl.cma lablglut.cma threads.cma"
-flags="-custom -thread -I +lablGL"
-test -z "$comp" && comp=ocamlc
-$comp -o apc $flags $libs apc.ml ml_apc.c
-cc -o hog -Wall -Werror -pedantic -W hog.c
+h=$(readlink -f $(dirname $0))
+r=$(readlink -f $h/..)
+t=$r/tbs
+d=MD5
 
-(cd mod && make)
+export OCAMLRUNPARAM=b
+
+if test $h = $PWD; then
+    mkdir -p build
+    cd build
+fi
+
+if ! md5sum --status -c $d; then
+    cp $h/build.ml build1.ml
+    md5sum $h/build.ml $h/build.sh $t/tbs.cma >$d.tmp
+    ocamlc.opt -g -thread -I $t unix.cma threads.cma tbs.cma build1.ml -o b
+    mv $d.tmp $d
+fi
+
+targets="apc"
+./b -O src:$h $* $targets
