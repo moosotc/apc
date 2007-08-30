@@ -92,7 +92,22 @@ wise) on Microsoft Windows.
 [3] http://cpu.rightmark.org/products/rmclock.shtml
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-To build you will need:
+To build idlestat (boring console application) you will need:
+
+GCC    - http://gcc.gnu.org/
+
+Plus all what is required to build a kernel module.
+
+Process:
+
+$ gcc -o idlestat idlestat.c
+$ cd mod && make
+
+Idlestat (as well as APC) requires kernel module to be loaded in order
+for it to operate. Module loading is described below.
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+To build APC (graphical application with bells etc) you will need:
 
 OCaml  - http://caml.inria.fr/ocaml/
 LablGL - http://wwwfun.kurims.kyoto-u.ac.jp/soft/lsl/lablgl.html
