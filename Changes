@@ -9,6 +9,8 @@
  * Add some logic to not draw stuff when it doesn't fit into the
    viewport
 
+ * Make QUIRK mode uncoditional for 2.6 series of kernels
+
 11
  * Fix constant bar width
 
