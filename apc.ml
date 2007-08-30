@@ -277,13 +277,6 @@ struct
               create 0 0.0 0.0 0.0 0.0 []
           )
   ;;
-
-  let getselfdir () =
-    try
-      Filename.dirname |< Unix.readlink "/proc/self/exe"
-    with exn ->
-      "./"
-  ;;
 end
 
 module Args =
@@ -296,7 +289,7 @@ struct
 
   let freq     = ref 1.0
   let interval = ref 15.0
-  let devpath  = NP.getselfdir () |> Filename.concat |< "itc" |> ref
+  let devpath  = ref "/dev/itc"
   let pgrid    = ref 10
   let sgrid    = ref 15
   let w        = ref 400
@@ -688,12 +681,32 @@ module View (V: sig val w : int val h : int end) =
 struct
   let ww = ref 0
   let wh = ref 0
+  let oldwidth = ref !Args.w
+  let barmode = ref false
   let funcs = ref []
 
   let keyboard ~key ~x ~y =
     if key = 27 || key = Char.code 'q'
     then
-      exit 0;
+      exit 0
+    ;
+    if key = Char.code 'b' && not !barmode
+    then
+      begin
+        let h = Glut.get Glut.WINDOW_HEIGHT in
+          oldwidth := Glut.get Glut.WINDOW_WIDTH;
+          Glut.reshapeWindow ~w:(!Args.barw + 4) ~h;
+          barmode := true;
+      end
+    ;
+    if key = Char.code 'a' && !barmode
+    then
+      begin
+        let h = Glut.get Glut.WINDOW_HEIGHT in
+          Glut.reshapeWindow ~w:!oldwidth ~h;
+          barmode := false;
+      end
+    ;
   ;;
 
   let add dri =
@@ -995,8 +1008,8 @@ struct
         (
           let x0, y0, w0, h0 = getviewport `labels in
           let x1, y1, w1, h1 = getviewport `graph in
-            w0 < 20 || h0 < 20 || x0 < 0 || y0 < 0 ||
-            w1 < 20 || h1 < 20 || x1 < 0 || y1 < 0
+            (!Args.labels && (w0 < 20 || h0 < 20 || x0 < 0 || y0 < 0))
+            || (w1 < 20 || h1 < 20 || x1 < 0 || y1 < 0)
         )
       ;
       if not !dontdraw
