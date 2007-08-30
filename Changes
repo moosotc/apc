@@ -13,6 +13,9 @@
 
  * Modify hog to use lower (than 1ns) timer frequency
 
+ * Add a simple script to load module and run apc (after trying
+   to adjust permissions to device)
+
 11
  * Fix constant bar width
 
