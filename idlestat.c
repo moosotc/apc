@@ -54,7 +54,7 @@ int main (int argc, char **argv)
     if (!idle) errx (1, "malloc %zu failed", 2 * nprocs * sizeof (idle[0]));
 
     fd = open ("/dev/itc", O_RDONLY);
-    if (fd < 0) errx (1, "open /dev/itc");
+    if (fd < 0) err (1, "open /dev/itc");
 
     idlenow (fd, nprocs, idle);
 
