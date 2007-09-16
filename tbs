@@ -17,10 +17,17 @@ fi
 
 if ! md5sum --status -c $d; then
     cp $h/build.ml build1.ml
-    md5sum $h/build.ml $h/tbs $t/tbs.cma >$d.tmp
+    md5sum $h/build.ml $h/build.sh $t/tbs.cma >$d.tmp
     ocamlc.opt -g -thread -I $t unix.cma threads.cma tbs.cma build1.ml -o b
     mv $d.tmp $d
 fi
 
+gcc="gcc"
+gxx="g++"
+test $(hostname) = "linmac" && {
+    gcc="$HOME/x/dev/gcc-4.2.1/bin/gcc";
+    gxx="$HOME/x/dev/gcc-4.2.1/bin/g++"
+}
+
 targets="apc"
-./b -O src:$h $* $targets
+./b -O src:$h -O gcc:$gcc -O g++:$gxx $* $targets
