@@ -13,8 +13,9 @@ let srcdir =
 ;;
 
 let _ =
-  cmo "-g -I +lablGL -thread" [srcdir] srcdir "apc";
+  cmopp ~flags:"-g -I +lablGL -thread" ~dirname:srcdir "apc";
   ocaml
+    "ocamlc.opt"
     "-ccopt '-Wall -o ml_apc.o'"
     "ml_apc.o"
     (StrSet.singleton "ml_apc.o")
@@ -36,6 +37,7 @@ let _ =
   prog "hog";
   prog "idlestat";
   ocaml
+    "ocamlc.opt"
     "-custom -thread -g -I +lablGL lablgl.cma lablglut.cma unix.cma threads.cma"
     "apc"
     (StrSet.singleton "apc")
@@ -50,9 +52,17 @@ let _ =
       then
         let src = Filename.concat moddir s in
         add_target s (StrSet.singleton src) (StrSet.singleton s) (StrSet.singleton src);
-        let build _ =
-          let c = [Run ("cp " ^ Filename.quote src ^ " " ^ Filename.quote s)] in
-          c, c, "COPY"
+        let build =
+          let commands _ =
+            [Run ("cp " ^ Filename.quote src ^ " " ^ Filename.quote s)]
+          and cookie _ = "cp"
+          and presentation _ =
+            "COPY"
+          in
+          { get_commands = commands
+          ; get_cookie = cookie
+          ; get_presentation = presentation
+          }
         in
         State.put_build_info s build;
         StrSet.add s deps
@@ -60,11 +70,16 @@ let _ =
         deps
     ) StrSet.empty modconts
     in
-    let build _ =
-      let c = [Run ("make")] in
-      c, c, "KBUILD"
+    let build =
+      let commands _ =  [Run ("make")]
+      and cookie _ = "make"
+      and presentation _ = "KBUILD" in
+      { get_commands = commands
+      ; get_cookie = cookie
+      ; get_presentation = presentation
+      }
     in
-    add_phony "mod" deps [];
+    add_phony "mod" deps "";
     State.put_build_info "mod" build;
   in
   ()
@@ -72,7 +87,7 @@ let _ =
 
 let () =
   let start = Unix.gettimeofday () in
-  Scan.all targets;
+  (* Scan.all targets; *)
   if dodeplist
   then
     List.iter State.print_deps targets
