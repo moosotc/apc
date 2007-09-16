@@ -1,3 +1,4 @@
+let start = Unix.gettimeofday ();;
 open List;;
 open Typs;;
 open Utils;;
@@ -86,35 +87,5 @@ let _ =
 ;;
 
 let () =
-  let start = Unix.gettimeofday () in
-  (* Scan.all targets; *)
-  if dodeplist
-  then
-    List.iter State.print_deps targets
-  else
-    begin
-      let build path =
-        let built = Unix.handle_unix_error Build.path path in
-        if not !Config.silent
-        then
-          if built
-          then print_endline (path ^ " has been built")
-          else print_endline ("nothing to be done for " ^ path)
-        ;
-      in
-      if jobs = 1
-      then
-        iter build targets
-      else
-        let rec loop i tids = if i = jobs then tids else
-            let tid = Thread.create (fun () -> iter build targets) () in
-            loop (succ i) (tid :: tids)
-        in
-        let tids = loop 0 [] in
-        iter Thread.join tids
-    end
-  ;
-  Cache.save !State.Config.cache;
-  let stop = Unix.gettimeofday () in
-  Format.eprintf "build took %f seconds@." (stop -. start);
+  Helpers.run start jobs targets dodeplist dotarlist
 ;;

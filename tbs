@@ -16,18 +16,16 @@ if test $h = $PWD; then
 fi
 
 if ! md5sum --status -c $d; then
-    cp $h/build.ml build1.ml
     md5sum $h/build.ml $h/build.sh $t/tbs.cma >$d.tmp
-    ocamlc.opt -g -thread -I $t unix.cma threads.cma tbs.cma build1.ml -o b
+    ocamlc.opt -o build.cmo -c -g -I $t $h/build.ml
+    ocamlc.opt -g -thread -I $t unix.cma threads.cma tbs.cma build.cmo -o b
     mv $d.tmp $d
 fi
 
 gcc="gcc"
-gxx="g++"
 test $(hostname) = "linmac" && {
     gcc="$HOME/x/dev/gcc-4.2.1/bin/gcc";
-    gxx="$HOME/x/dev/gcc-4.2.1/bin/g++"
 }
 
-targets="apc"
-./b -O src:$h -O gcc:$gcc -O g++:$gxx $* $targets
+targets="apc idlestat"
+./b -O src:$h -O gcc:$gcc $* $targets
