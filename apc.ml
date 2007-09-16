@@ -1382,6 +1382,7 @@ let create_bars h kactive iactive =
         ; (0.0, 0.0, 1.0), kload.nice
         ; (1.0, 0.0, 0.0), kload.sys
         ; (1.0, 1.0, 1.0), kload.intr
+        ; (0.5, 0.8, 1.0), kload.softirq
         ; (0.75, 0.5, 0.5), (1.0 -. kload.iowait) -. sum
         ; (0.0, 1.0, 0.0), kload.all -. kload.iowait -. kload.softirq
         ]
