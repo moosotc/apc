@@ -4,6 +4,11 @@ set -e
 
 dev="/dev/itc"
 
+function suX() { # remove X to enjoy sudo
+    shift
+    sudo $*
+}
+
 ! test `uname -s` = "Linux" && {
     echo `uname -s` is not Linux
     exit 1
