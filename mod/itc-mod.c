@@ -6,6 +6,7 @@
 #include <linux/sched.h>
 #include <linux/interrupt.h>
 
+#include <linux/fs.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
 #include <linux/module.h>
