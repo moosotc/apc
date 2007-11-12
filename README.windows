@@ -2,6 +2,8 @@ Tested on Windows XP SP2 (X86)
 SMP - tested (AMD X2 - i.e. 2 CPUs)
 Kernel accounting _IS_ inaccurate
 
+http://blog.kalmbachnet.de/?postid=28
+
 Apparently RMClock (http://cpu.rightmark.org/products/rmclock.shtml)
 either somehow sets CR4.PCE or hooks to the #GP(0) handler so that
 RDPMC works from user-space.

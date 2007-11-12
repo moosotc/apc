@@ -1,4 +1,9 @@
 Tested on Mac OS X Tiger (PPC)
 SMP - not tested
 Kernel accounting appears to be rather chaotic (... and wrong ...)
-No kernel mode driver hence no workaround
+       According to cursory glance at XNU source code it also updates
+       accounting times during timer interrupts, in effect behavior
+       is mostly the same as the on in Linux (Documentation/cpu-load.txt)
+
+No kernel mode driver hence no workaround. Same RDTSC/RDPMC hackery can
+be used on Intel versions.
