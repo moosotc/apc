@@ -2,6 +2,9 @@ Tested on Windows XP SP2 (X86)
 SMP - tested (AMD X2 - i.e. 2 CPUs)
 Kernel accounting _IS_ inaccurate
 
+winhog (gcc -o winhog.exe winhog.c -lwinmm) can be used to demonstrate
+that
+
 http://blog.kalmbachnet.de/?postid=28
 
 Apparently RMClock (http://cpu.rightmark.org/products/rmclock.shtml)
