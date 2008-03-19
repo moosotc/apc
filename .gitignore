@@ -1,8 +1,12 @@
 build/*
 *.o
 *.cm*
+*.exe
 *.ko
 apc
 TODO
 hog
 idlestat
+mod/.tmp_versions/*
+mod/Module.symvers
+mod/*.mod.c
