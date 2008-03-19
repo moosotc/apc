@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -e
+
+cc -o hog -Wall -Werror -pedantic -W hog.c
+cc -o idlestat -Wall -Werror -W idlestat.c
+
+(cd mod && make)
