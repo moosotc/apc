@@ -17,6 +17,7 @@
 #include <linux/mm.h>
 #include <linux/pm.h>
 #include <linux/miscdevice.h>
+#include <linux/kernel_stat.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -24,6 +25,7 @@
 #ifdef CONFIG_6xx
 #include <asm/machdep.h>
 #define pm_idle ppc_md.power_save
+#define ACCOUNT_IRQ
 #endif
 
 #if !(defined CONFIG_X86 || defined CONFIG_6xx)
@@ -156,12 +158,25 @@ itc_monotonic (struct timeval *tv)
   do_gettimeofday (tv);
 }
 
+#ifdef ACCOUNT_IRQ
+static  cputime64_t
+itc_irq_time (void)
+{
+  struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
+  return cpustat->irq;
+}
+#endif
+
 static void
 itc_idle (void)
 {
   struct itc *itc;
   struct timeval tv;
   unsigned long flags;
+#ifdef ACCOUNT_IRQ
+  struct timeval tv_irq_before, tv_irq_after;
+  cputime64_t irq_time_before, irq_time_after;
+#endif
 
 #ifdef ITC_PREEMPT_HACK
   preempt_disable ();
@@ -172,6 +187,9 @@ itc_idle (void)
   itc = &global_itc[smp_processor_id ()];
   itc_monotonic (&itc->sleep_started);
   itc->sleeping = 1;
+#ifdef ACCOUNT_IRQ
+  irq_time_before = itc_irq_time ();
+#endif
   spin_unlock_irqrestore (&lock, flags);
 
 #ifdef QUIRK
@@ -207,7 +225,19 @@ itc_idle (void)
 
   spin_lock_irqsave (&lock, flags);
   itc_monotonic (&tv);
+
+#ifdef ACCOUNT_IRQ
+  irq_time_after = itc_irq_time ();
+
+  cputime_to_timeval (irq_time_before, &tv_irq_before);
+  cputime_to_timeval (irq_time_after, &tv_irq_after);
+
   cpeamb (&itc->cumm_sleep_time, &tv, &itc->sleep_started);
+  cpeamb (&itc->cumm_sleep_time, &tv_irq_before, &tv_irq_after);
+#else
+  cpeamb (&itc->cumm_sleep_time, &tv, &itc->sleep_started);
+#endif
+
   itc->sleeping = 0;
   spin_unlock_irqrestore (&lock, flags);
   /* printk ("idle out %d\n", smp_processor_id ()); */
