@@ -10,6 +10,7 @@ apc-linux.run
 apc.ml
 build.bat
 build.linux
+build.linux.console
 build.macosx
 build.ml
 build.solaris
@@ -19,3 +20,4 @@ ml_apc.c
 mod/Makefile
 mod/itc-mod.c
 tbs
+winhog.c
