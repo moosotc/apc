@@ -1,3 +1,7 @@
+#ifdef CONFIG_PREEMPT_RT
+#error Preempt RT kernels are not supported
+#endif
+
 #ifdef CONFIG_PREEMPT
 #define ITC_PREEMPT_HACK
 #endif

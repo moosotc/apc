@@ -60,9 +60,9 @@ Apart    from   being inaccurate,  `/proc/stat'  exports monotonically
 increasing load times but _NOT_  real time[1], so there's omni-present
 sub-jiffy error. Not to mention that jiffy resolution is somewhat low.
 
-If you depend on sorta-kinda semi-correct load meter in situation when
-`/proc/stat'  is disconnected with reality  APC might present a better
-choice.
+If you are  not running RT kernel  and  need sorta-kinda, semi-correct
+load meter in situation when `/proc/stat' is disconnected with reality
+APC might present a better choice.
 
 The kernel  module part  of APC   tries to insert  itself  as  a power
 management idle  handler and when  invoked measure  how  much time  is
