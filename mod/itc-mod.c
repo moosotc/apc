@@ -26,14 +26,14 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
-#ifdef CONFIG_6xx
+#if defined CONFIG_6xx || defined CONFIG_PPC64
 #include <asm/machdep.h>
 #define pm_idle ppc_md.power_save
 #define ACCOUNT_IRQ
 #endif
 
-#if !(defined CONFIG_X86 || defined CONFIG_6xx)
-#error Support for this architecture is not written yet
+#if !(defined CONFIG_X86 || defined CONFIG_6xx || defined CONFIG_PPC64)
+#error Support for this architecture is nto written yet
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 0)
@@ -295,7 +295,12 @@ itc_release (struct inode * inode, struct file * filp)
   itc_leave_bkl ();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION (2, 6, 0)
   /* XXX: 2.4 */
+#if LINUX_VERSION_CODE > KERNEL_VERSION (2, 6, 26)
+  /* 15c8b6c1aaaf1c4edd67e2f02e4d8e1bd1a51c0d */
+  on_each_cpu (dummy_wakeup, NULL, 1);
+#else
   on_each_cpu (dummy_wakeup, NULL, 0, 1);
+#endif
 #endif
   return 0;
 }
@@ -350,7 +355,7 @@ itc_read (struct file *file, char * buf, size_t count, loff_t * ppos)
   if (count < itemsize * num_present_cpus ())
     {
       printk (KERN_ERR
-              "attempt to read something funny %d expected %d(%d,%d)\n",
+              "attempt to read something funny %zu expected %zu(%zu,%u)\n",
               count, itemsize * num_present_cpus (),
               itemsize, num_present_cpus ());
       return -EINVAL;
