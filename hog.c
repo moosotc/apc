@@ -56,7 +56,7 @@ int main (int argc, char **argv)
 
         errno = 0;
         divisor = strtol (argv[1], &endptr, 0);
-        if ((endptr && !*endptr)
+        if ((endptr && *endptr)
             || (errno == ERANGE && (divisor == LONG_MAX || divisor == LONG_MIN))
             || (errno && divisor == 0)) {
             err (EXIT_FAILURE, "Can't read `%s' as integer", argv[1]);
