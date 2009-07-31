@@ -76,7 +76,7 @@ int main (int argc, char **argv)
         for (i = 0; i < nprocs; ++i) {
             double di = curr[i] - prev[i];
 
-            printf ("cpu%d load - %.2f%%\n", i, 100.0 * (1.0 - di / d));
+            printf ("cpu%d - %.2f%%\n", i, 100.0 * (1.0 - di / d));
         }
 
         t = curr;
