@@ -40,7 +40,7 @@ static void err (int status, const char *fmt, ...)
     exit (status);
 }
 
-int main (void)
+int main (int argc, char **argv)
 {
     unsigned int i;
     struct itimerval it;
@@ -49,6 +49,22 @@ int main (void)
     unsigned long v[HIST];
     double tmp = 0.0;
     unsigned long n;
+    long divisor;
+
+    if (argc > 1) {
+        char *endptr;
+
+        errno = 0;
+        divisor = strtol (argv[1], &endptr, 0);
+        if ((endptr && !*endptr)
+            || (errno == ERANGE && (divisor == LONG_MAX || divisor == LONG_MIN))
+            || (errno && divisor == 0)) {
+            err (EXIT_FAILURE, "Can't read `%s' as integer", argv[1]);
+        }
+    }
+    else {
+        divisor = 250;
+    }
 
     act.sa_handler = sighandler;
     if (sigemptyset (&act.sa_mask)) {
@@ -57,9 +73,9 @@ int main (void)
     act.sa_flags = 0;
 
     it.it_interval.tv_sec = 0;
-    it.it_interval.tv_usec = 1000000 / 250;
+    it.it_interval.tv_usec = 1000000 / divisor;
     it.it_value.tv_sec = 0;
-    it.it_value.tv_usec = 1000000 / 250;
+    it.it_value.tv_usec = 1000000 / divisor;
 
     if (sigaction (SIGALRM, &act, NULL)) {
         err (EXIT_FAILURE, "sigaction failed");
