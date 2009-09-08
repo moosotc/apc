@@ -22,6 +22,7 @@
 #include <linux/pm.h>
 #include <linux/miscdevice.h>
 #include <linux/kernel_stat.h>
+#include <linux/smp_lock.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
