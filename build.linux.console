@@ -2,7 +2,11 @@
 
 set -e
 
+case $(uname -m) in
+    "x86_64") flags=-m64 ;;
+    *) ;;
+esac
 cc -o hog -Wall -Werror -pedantic -W hog.c
-cc -o idlestat -Wall -Werror -W idlestat.c
+cc -o idlestat $flags -Wall -Werror -W idlestat.c
 
 (cd mod && make)
