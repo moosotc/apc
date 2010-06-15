@@ -949,6 +949,7 @@ struct
     for i = 0 to V.sgrid
     do
       let x = if i = 0 then 0.0009 else float i *. gscale in
+      let x = if i = V.sgrid then x -. 0.0009 else x in
         GlDraw.vertex ~x ~y:0.0 ();
         GlDraw.vertex ~x ~y:1.0 ();
     done;
@@ -975,7 +976,8 @@ struct
         for i = 0 to lim
         do
           let y = (i * V.pgrid |> float) /. 100.0 in
-          let y = if i = lim then y -. 0.0009 else y in
+          let y = if i = lim then y else y in
+          let y = if i = 0 then 0.0009 else y in
             GlDraw.vertex ~x:0.0 ~y ();
             GlDraw.vertex ~x:1.0 ~y ();
         done;
