@@ -12,3 +12,4 @@ idlestat
 mod/.tmp_versions/*
 mod/Module.symvers
 mod/*.mod.c
+mod/modules.order
