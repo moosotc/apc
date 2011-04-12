@@ -1230,7 +1230,7 @@ let create fd w h =
                     softirq
                 ;
               in
-                { all = idle
+                { all = user +. nice +. sys
                 ; user = user
                 ; nice = nice
                 ; sys = sys
@@ -1241,9 +1241,10 @@ let create fd w h =
                 }
             in
             let i1 = ref (gall ks) in
-              fun ks _ _ ->
+              fun ks t1 t2 ->
                 let i2 = gall ks in
                 let diff = add_stat i2 (neg_stat !i1) in
+                let diff = { diff with all = t2 -. t1 -. diff.all } in
                   i1 := i2;
                   diff
         in
