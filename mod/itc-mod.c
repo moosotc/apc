@@ -263,10 +263,6 @@ itc_open (struct inode * inode, struct file * file);
 static int
 itc_release (struct inode * inode, struct file * file);
 
-static int
-itc_ioctl (struct inode * inode, struct file * file,
-           unsigned int cmd, unsigned long arg);
-
 static ssize_t
 itc_read (struct file * file, char * buf, size_t count, loff_t * ppos);
 
@@ -275,7 +271,6 @@ static struct file_operations itc_fops =
     .owner   = THIS_MODULE,
     .open    = itc_open,
     .release = itc_release,
-    .ioctl   = itc_ioctl,
     .llseek  = no_llseek,
     .read    = itc_read,
   };
@@ -390,18 +385,6 @@ itc_read (struct file *file, char * buf, size_t count, loff_t * ppos)
       retval = -EFAULT;
     }
   return retval;
-}
-
-/**********************************************************************
- *
- * ioctl handler
- *
- **********************************************************************/
-static int
-itc_ioctl (struct inode * inode, struct file * filp,
-           unsigned int cmd, unsigned long arg)
-{
-  return -EINVAL;
 }
 
 /**********************************************************************
