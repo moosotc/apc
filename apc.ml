@@ -948,7 +948,7 @@ struct
   let sgrid () =
     for i = 0 to V.sgrid
     do
-      let x = if i = 0 then 0.0009 else float i *. gscale in
+      let x = if i = 0 then 0.00009 else float i *. gscale in
       let x = if i = V.sgrid then x -. 0.0009 else x in
         GlDraw.vertex ~x ~y:0.0 ();
         GlDraw.vertex ~x ~y:1.0 ();
@@ -976,7 +976,7 @@ struct
         for i = 0 to lim
         do
           let y = (i * V.pgrid |> float) /. 100.0 in
-          let y = if i = lim then y else y in
+          let y = if i = lim then y -. 0.0009 else y in
           let y = if i = 0 then 0.0009 else y in
             GlDraw.vertex ~x:0.0 ~y ();
             GlDraw.vertex ~x:1.0 ~y ();
@@ -1160,6 +1160,13 @@ let create fd w h =
       ; update = Sk.update
       }
     in
+    let module Sk2 = Sampler (S) in
+    let ksampler2 =
+      { getyielder = Sk2.getyielder
+      ; color = (1.0, 1.0, 1.0)
+      ; update = Sk2.update
+      }
+    in
     let module V = struct
       let x = x
       let y = y
@@ -1170,6 +1177,7 @@ let create fd w h =
       let pgrid = !Args.pgrid
       let sgrid = !Args.sgrid
       let samplers =
+        ksampler2 ::
         if !Args.isampler
         then
           isampler :: (if !Args.ksampler then [ksampler] else [])
@@ -1248,7 +1256,20 @@ let create fd w h =
                   i1 := i2;
                   diff
         in
-          (i, calc, ksampler) :: kaccu
+        let calc2 =
+          let idle1 = ref 0.0 in
+          fun ks (t1 : float) (t2 : float) ->
+            let i' = if i = NP.nprocs then 0 else succ i in
+            let g ks n = Array.get ks i' |> snd |> Array.get |< n in
+            let idle2 = g ks NP.idle in
+            let diff = idle2 -. !idle1 in
+            let diff = { zero_stat with all = diff } in
+            idle1 := idle2;
+            diff
+        in
+        (i, calc, ksampler)
+        (* :: (i, calc2, ksampler2) *)
+        :: kaccu
       else
         kaccu
     in
@@ -1387,7 +1408,7 @@ let create_bars h kactive iactive =
         ; (1.0, 1.0, 1.0), kload.intr
         ; (0.5, 0.8, 1.0), kload.softirq
         ; (0.75, 0.5, 0.5), (1.0 -. kload.iowait) -. sum
-        ; (0.0, 1.0, 0.0), kload.all -. kload.iowait -. kload.softirq
+        (* ; (0.0, 1.0, 0.0), kload.all -. kload.iowait -. kload.softirq *)
         ]
     else
       [ (1.0, 0.0, 0.0), 1.0 -. kload.idle ]
