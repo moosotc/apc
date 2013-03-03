@@ -16,7 +16,6 @@
 #include <linux/kernel_stat.h>
 #include <linux/cpuidle.h>
 
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/idle.h>
 
