@@ -41,7 +41,6 @@ int main (int argc, char **argv)
     int fd;
     int nprocs;
     double *idle;
-    int flip = 0;
     double *curr, *prev;
 
     (void) argc;
@@ -58,7 +57,6 @@ int main (int argc, char **argv)
 
     idlenow (fd, nprocs, idle);
 
-    flip = 0;
     curr = &idle[nprocs];
     prev = idle;
 
