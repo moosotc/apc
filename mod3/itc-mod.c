@@ -155,6 +155,11 @@ itc_release (struct inode * inode, struct file * filp)
   return 0;
 }
 
+static void
+dummy_wakeup (void *unused)
+{
+}
+
 static int
 itc_open (struct inode * inode, struct file * filp)
 {
@@ -176,6 +181,7 @@ itc_open (struct inode * inode, struct file * filp)
 
   filp->f_op = &itc_fops;
   idle_notifier_register (&nblk);
+  on_each_cpu (dummy_wakeup, NULL, 1);
 
   return ret;
 }
