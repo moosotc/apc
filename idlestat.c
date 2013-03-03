@@ -64,12 +64,12 @@ int main (int argc, char **argv)
         int i;
         double s, e, d, *t;
 
-        s = now ();
         idlenow (fd, nprocs, prev);
+        s = now ();
         sleep (1);
+        idlenow (fd, nprocs, curr);
         e = now ();
         d = e - s;
-        idlenow (fd, nprocs, curr);
 
         for (i = 0; i < nprocs; ++i) {
             double di = curr[i] - prev[i];
