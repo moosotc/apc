@@ -82,7 +82,7 @@ int main (int argc, char **argv)
             printf ("%7.2f", 100.0 * (1.0 - di / d));
             if (i < nprocs) fputc (' ', stdout);
         }
-        if (i > 0) {
+        if (i > 1) {
             printf ("%6.2f\n", 100.0 * (1.0 - ai / a));
         }
         else {
