@@ -1,0 +1,14 @@
+#!/bin/sh -e
+
+dir=$HOME/xsrc/apc
+
+grep -q itc /proc/modules || {
+    sudo insmod $dir/mod/itc.ko
+    sudo chmod a+r /dev/itc
+}
+
+pid=$(pidof idlestat) \
+    && kill $pid \
+        || {
+        $dir/idlestat | osd_cat -f 9x15bold -A right -c black &
+    }
