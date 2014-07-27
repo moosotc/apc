@@ -39,12 +39,16 @@ static void idlenow (int fd, int nprocs, double *p)
 int main (int argc, char **argv)
 {
     int fd;
+    int n = 1;
     int nprocs;
     double *idle;
     double *curr, *prev;
 
     (void) argc;
     (void) argv;
+
+    if (argc > 1)
+        n = atoi (argv[1]);
 
     nprocs = get_nprocs ();
     if (nprocs <= 0) errx (1, "get_nprocs returned %d", nprocs);
@@ -67,7 +71,7 @@ int main (int argc, char **argv)
 
         idlenow (fd, nprocs, prev);
         s = now ();
-        sleep (1);
+        sleep (n);
         idlenow (fd, nprocs, curr);
         e = now ();
         d = e - s;

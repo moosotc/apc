@@ -10,5 +10,5 @@ grep -q itc /proc/modules || {
 pid=$(pidof idlestat) \
     && kill $pid \
         || {
-        $dir/idlestat | osd_cat -f 9x15bold -A right -c black &
+        $dir/idlestat 3 | osd_cat -f 9x15bold -A right -c black -l 3 &
     }
