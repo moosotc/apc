@@ -59,10 +59,11 @@ int main (int argc, char **argv)
 
     curr = &idle[nprocs];
     prev = idle;
+    setbuf (stdout, NULL);
 
     for (;;) {
         int i;
-        double s, e, d, *t;
+        double s, e, d, *t, a = 0.0, ai = 0.0;
 
         idlenow (fd, nprocs, prev);
         s = now ();
@@ -74,7 +75,18 @@ int main (int argc, char **argv)
         for (i = 0; i < nprocs; ++i) {
             double di = curr[i] - prev[i];
 
-            printf ("cpu%d - %.2f%%\n", i, 100.0 * (1.0 - di / d));
+            /* printf ("\rcpu%d - %.2f", i, 100.0 * (1.0 - di / d)); */
+            /* printf ("cpu%d - %6.2f\n", i, 100.0 * (1.0 - di / d)); */
+            a += d;
+            ai += di;
+            printf ("%6.2f", 100.0 * (1.0 - di / d));
+            if (i < nprocs) fputc (' ', stdout);
+        }
+        if (i > 0) {
+            printf ("%6.2f\n", 100.0 * (1.0 - ai / a));
+        }
+        else {
+            fputc ('\n', stdout);
         }
 
         t = curr;

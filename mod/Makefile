@@ -6,7 +6,7 @@ KVERSION  ?= $(shell uname -r)
 KDIR      ?= /lib/modules/$(KVERSION)/build
 OUTDIR    ?= /lib/modules/$(KVERSION)/misc
 
-MM        := $(shell echo $(KVERSION) | cut -d. -f'1 2')
+MM        := $(shell echo $(KVERSION) | cut -d. -f1,2)
 
 ifeq ($(MM),2.4)
 KMOD_SUFFIX := .o
@@ -15,7 +15,9 @@ else
 ifeq ($(MM),2.6)
 KMOD_SUFFIX := .ko
 else
-$(error Only 2.4 and 2.6 kernel series are supported. You have "$(KVERSION)")
+ifneq ($(MM),3.0)
+#$(error Only 2.4, 2.6, 3.0 kernel series are supported. You have "$(MM)")
+endif
 endif
 endif
 

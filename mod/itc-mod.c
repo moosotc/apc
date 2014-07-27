@@ -22,15 +22,18 @@
 #include <linux/pm.h>
 #include <linux/miscdevice.h>
 #include <linux/kernel_stat.h>
-#include <linux/smp_lock.h>
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION (3, 0, 0)
 #include <asm/system.h>
+#include <linux/smp_lock.h>
+#endif
 #include <asm/uaccess.h>
 
 #if defined CONFIG_6xx || defined CONFIG_PPC64
 #include <asm/machdep.h>
 #define pm_idle ppc_md.power_save
+#if LINUX_VERSION_CODE < KERNEL_VERSION (3, 0, 0)
 #define ACCOUNT_IRQ
+#endif
 #endif
 
 #if !(defined CONFIG_X86 || defined CONFIG_6xx || defined CONFIG_PPC64)
@@ -59,21 +62,20 @@
 #ifdef CONFIG_PREEMPT
 #define itc_enter_bkl() do {                    \
   preempt_disable ();                           \
-  lock_kernel ();                               \
 } while (0)
 #define itc_leave_bkl() do {                    \
-  unlock_kernel ();                             \
   preempt_enable ();                            \
 } while (0)
 #else
-#define itc_enter_bkl lock_kernel
-#define itc_leave_bkl unlock_kernel
+#define itc_enter_bkl() for (;;) {smp_mb (); break;}
+#define itc_leave_bkl() for (;;) {smp_mb (); break;}
 #ifdef ITC_PREEMPT_HACK
 #error Attempt to enable ITC_PREEMPT_HACK on non preemptible kernel
 #endif
 #endif
 
 MODULE_DESCRIPTION ("Idle time collector");
+MODULE_LICENSE ("public domain");
 
 #ifdef CONFIG_X86
 static void (*fidle_func) (void);
@@ -87,7 +89,7 @@ MODULE_PARM_DESC (idle_func, "address of default idle function");
 #endif
 
 #define DEVNAME "itc"
-static spinlock_t lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK (lock);
 
 static void (*orig_pm_idle) (void);
 static unsigned int itc_major;
@@ -142,7 +144,7 @@ dummy_wakeup (void *unused)
 {
   printk (KERN_DEBUG "waking up %d\n", smp_processor_id ());
   /* needed? safe? */
-  set_need_resched ();
+  /* set_need_resched (); */
 }
 #endif
 
@@ -305,7 +307,6 @@ static int
 itc_open (struct inode * inode, struct file * filp)
 {
   int ret = 0;
-  const struct file_operations *old_fops = filp->f_op;
   unsigned int minor = iminor (inode);
 
   if (itc_major)
@@ -321,9 +322,7 @@ itc_open (struct inode * inode, struct file * filp)
       return -EALREADY;
     }
 
-  /* old_fops = filp->f_op; */
-  filp->f_op = fops_get (&itc_fops);
-  fops_put (old_fops);
+  filp->f_op = &itc_fops;
 
   itc_enter_bkl ();
   if (pm_idle != itc_idle)
