@@ -79,7 +79,7 @@ int main (int argc, char **argv)
             /* printf ("cpu%d - %6.2f\n", i, 100.0 * (1.0 - di / d)); */
             a += d;
             ai += di;
-            printf ("%6.2f", 100.0 * (1.0 - di / d));
+            printf ("%7.2f", 100.0 * (1.0 - di / d));
             if (i < nprocs) fputc (' ', stdout);
         }
         if (i > 0) {
